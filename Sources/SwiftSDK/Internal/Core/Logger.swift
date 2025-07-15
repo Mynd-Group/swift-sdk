@@ -1,12 +1,12 @@
 
-protocol LoggerProtocol {
+protocol LoggerProtocol: Sendable {
     func info(_ message: String, dictionary: [String: Any]?)
     func warn(_ message: String, dictionary: [String: Any]?)
     func error(_ message: String, dictionary: [String: Any]?)
     func debug(_ message: String, dictionary: [String: Any]?)
 }
 
-struct Logger: LoggerProtocol {
+public struct Logger: LoggerProtocol, Sendable {
     let prefix: String
 
     init(prefix: String = "") {
