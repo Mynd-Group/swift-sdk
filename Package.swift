@@ -1,25 +1,42 @@
 // swift-tools-version: 6.1
-// The swift-tools-version declares the minimum version of Swift required to build this package.
-
 import PackageDescription
 
 let package = Package(
     name: "SwiftSDK",
+
     platforms: [
         .iOS(.v13),
         .macOS(.v10_15),
     ],
+
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
+        // Your library (unchanged)
         .library(
             name: "SwiftSDK",
-            targets: ["SwiftSDK"]),
+            targets: ["SwiftSDK"]
+        ),
+
+        // Optional: make the CLI runnable/dispatchable via SPM
+        .executable(
+            name: "terminal-app", // any lowercase name you like
+            targets: ["TerminalApp"]
+        ),
     ],
+
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
+        // Library target
         .target(
-            name: "SwiftSDK"),
+            name: "SwiftSDK"
+        ),
+
+        // CLI target (folder: Sources/TerminalApp)
+        .executableTarget(
+            name: "TerminalApp",
+            dependencies: ["SwiftSDK"]
+            // , path: "Sources/TerminalApp"   // add if the folder is not the default
+        ),
+
+        // Test target
         .testTarget(
             name: "SwiftSDKTests",
             dependencies: ["SwiftSDK"]

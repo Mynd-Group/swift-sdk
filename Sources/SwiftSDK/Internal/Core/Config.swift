@@ -5,5 +5,6 @@ public protocol ConfigProtocol {
 }
 
 struct Config: ConfigProtocol {
-   public static let baseUrl: URL = URL(string: "https://api.example.com")!
+    public static let baseUrl: URL = .init(string: "http://localhost:4000/api/v1")!
 }
+

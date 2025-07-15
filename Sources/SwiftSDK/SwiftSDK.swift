@@ -1,18 +1,12 @@
-func authFn() -> AuthPayload {
-    return AuthPayload(
-        accessToken: "", refreshToken: "", accessTokenExpiresAtUnixMs: 0
-    )
-}
-
-protocol MyndSDKProtocol {
+protocol SwiftSDKProtocol {
     var catalogue: CatalogueClientProtocol { get }
 }
 
-struct MyndSDK: MyndSDKProtocol {
+public struct SwiftSDK: SwiftSDKProtocol {
     public let catalogue: CatalogueClientProtocol
 
     public init(
-        authFunction: @Sendable @escaping () -> AuthPayloadProtocol,
+        authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
     ) {
         let httpClient = HttpClient()
         let authClient = AuthClient(config: AuthClientConfig(
