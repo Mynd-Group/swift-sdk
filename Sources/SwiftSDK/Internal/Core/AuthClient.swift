@@ -151,12 +151,12 @@ public actor AuthClient: AuthClientProtocol {
         print("URL: \(url)")
 
         struct RefreshRequest: Encodable, Decodable {
-            let refresh_token: String
+            let refreshToken: String
         }
 
         do {
             let response: AuthPayload = try await httpClient.post(
-                url, body: RefreshRequest(refresh_token: currentPayload.refreshToken),
+                url, body: RefreshRequest(refreshToken: currentPayload.refreshToken),
                 headers: headers
             )
             print("Response: \(response)")
