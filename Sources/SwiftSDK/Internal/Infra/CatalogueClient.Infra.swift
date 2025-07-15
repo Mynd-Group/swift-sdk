@@ -5,7 +5,7 @@ public struct CatalogueClientInfraConfig {
     public let authedHttpClient: HttpClientProtocol
 }
 
-public struct CatalogueClientInfra: CatalogueClientProtocol {
+public struct CatalogueClientInfraService: CatalogueClientProtocol {
     private var authedHttpClient: HttpClientProtocol
     init(config: CatalogueClientInfraConfig) {
         authedHttpClient = config.authedHttpClient

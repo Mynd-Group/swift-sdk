@@ -28,11 +28,11 @@ protocol AuthClientProtocol: Sendable {
 }
 
 public struct AuthClientConfig {
-    public let authFunction: @Sendable () async throws -> AuthPayloadProtocol
+    public let authFunction: () async throws -> AuthPayloadProtocol
     public let httpClient: HttpClientProtocol
 
     public init(
-        authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
+        authFunction: @escaping () async throws -> AuthPayloadProtocol,
         httpClient: HttpClientProtocol
     ) {
         self.authFunction = authFunction
@@ -44,7 +44,7 @@ public actor AuthClient: AuthClientProtocol {
     // MARK: – Dependencies
 
     private let httpClient: HttpClientProtocol
-    private let authFunction: @Sendable () async throws -> AuthPayloadProtocol
+    private let authFunction: () async throws -> AuthPayloadProtocol
 
     // MARK: – Cached state
 
@@ -53,7 +53,7 @@ public actor AuthClient: AuthClientProtocol {
 
     // MARK: – Init
 
-    public init(config: AuthClientConfig) async throws {
+    public init(config: AuthClientConfig) {
         httpClient = config.httpClient
         authFunction = config.authFunction
     }

@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 
 public protocol HttpClientProtocol: Sendable {
     nonisolated func get<R: Decodable>(
@@ -14,7 +14,6 @@ public protocol HttpClientProtocol: Sendable {
     ) async throws -> R
 }
 
-
 public final class HttpClient: HttpClientProtocol {
     private let session: URLSession
     private let encoder: JSONEncoder
@@ -25,9 +24,9 @@ public final class HttpClient: HttpClientProtocol {
         encoder: JSONEncoder = .init(),
         decoder: JSONDecoder = .init()
     ) {
-        self.session  = session
-        self.encoder  = encoder
-        self.decoder  = decoder
+        self.session = session
+        self.encoder = encoder
+        self.decoder = decoder
     }
 
     public nonisolated func get<R: Decodable>(
@@ -40,13 +39,14 @@ public final class HttpClient: HttpClientProtocol {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse,
-              200..<300 ~= http.statusCode else {
+              200 ..< 300 ~= http.statusCode
+        else {
             throw URLError(.badServerResponse)
         }
         return try decoder.decode(R.self, from: data)
     }
 
-     public nonisolated func post<B: Encodable, R: Decodable>(
+    public nonisolated func post<B: Encodable, R: Decodable>(
         _ url: URL,
         body: B,
         headers: [String: String]? = nil
@@ -58,13 +58,15 @@ public final class HttpClient: HttpClientProtocol {
 
         do {
             request.httpBody = try encoder.encode(body)
+
         } catch {
             throw error
         }
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse,
-              200..<300 ~= http.statusCode else {
+              200 ..< 300 ~= http.statusCode
+        else {
             throw URLError(.badServerResponse)
         }
         return try decoder.decode(R.self, from: data)
@@ -76,7 +78,8 @@ public final class HttpClient: HttpClientProtocol {
         session.dataTaskPublisher(for: request)
             .tryMap { data, response in
                 guard let http = response as? HTTPURLResponse,
-                      200..<300 ~= http.statusCode else {
+                      200 ..< 300 ~= http.statusCode
+                else {
                     throw URLError(.badServerResponse)
                 }
                 return data
@@ -86,3 +89,4 @@ public final class HttpClient: HttpClientProtocol {
             .eraseToAnyPublisher()
     }
 }
+

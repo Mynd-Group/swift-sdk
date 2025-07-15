@@ -168,7 +168,7 @@ private func makeSUT<H: HttpClientProtocol & Sendable>(
         authFunction: { try await authProvider.auth() },
         httpClient: http
     )
-    return try await AuthClient(config: cfg)
+    return AuthClient(config: cfg)
 }
 
 // MARK: – Test-suite

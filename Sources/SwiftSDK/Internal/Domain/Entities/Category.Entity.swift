@@ -1,9 +1,9 @@
-public protocol CategoryImageProtocol {
+public protocol CategoryImageProtocol: Sendable {
     var id: String { get }
     var url: String { get }
 }
 
-public protocol CategoryProtocol {
+public protocol CategoryProtocol: Sendable {
     var id: String { get }
     var name: String { get }
     var image: CategoryImage? { get }
@@ -30,4 +30,3 @@ public struct CategoryImage: CategoryImageProtocol, Decodable {
         self.url = url
     }
 }
-
