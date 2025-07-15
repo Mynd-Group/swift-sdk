@@ -1,11 +1,11 @@
 import Foundation
 
-public protocol PlaylistWithSongsProtocol {
+public protocol PlaylistWithSongsProtocol: Sendable {
     var playlist: Playlist { get }
     var songs: [Song] { get }
 }
 
-public struct PlaylistWithSongs: PlaylistWithSongsProtocol, Decodable {
+public struct PlaylistWithSongs: PlaylistWithSongsProtocol, Decodable, Sendable {
     public let playlist: Playlist
     public let songs: [Song]
 
@@ -14,4 +14,3 @@ public struct PlaylistWithSongs: PlaylistWithSongsProtocol, Decodable {
         self.songs = songs
     }
 }
-

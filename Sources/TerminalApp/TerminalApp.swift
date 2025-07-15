@@ -2,7 +2,7 @@ import SwiftSDK
 
 public func authFn() async -> AuthPayload {
     return AuthPayload(
-        accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbklkIjoiZWNjNzU2NzgtNWQ3Yy00NzJkLTgwMDMtNGUxZWM1YzE2MDdiIiwiaW50ZWdyYXRpb25Vc2VySWQiOiI4MTY1NmI5Ni1iN2E3LTQ0NGQtOTkyNy0yMGIyYzNkN2M2NmEiLCJhY2NvdW50SWQiOiJjYWEzMGUxYS1mZTFiLTRjMzQtODJiMy0zMDFlNzI0YzU2NDIiLCJyZWZyZXNoVG9rZW5JZCI6IjA3MzhmNDM0LTQxZTgtNGJkNC04YjYwLWQ0NWIxNjAyYTgxOSIsImludGVncmF0aW9uQXBpS2V5SWQiOiJiYzEwMzAxNS03M2FlLTRmMGEtYmM0OC1kYjE5ZTg0MjQwMTciLCJpYXQiOjE3NTI1OTMyNzUsImV4cCI6MTc1MjU5NTA3NX0.k4gpCYbXC1DxNHqwCiBs7cFV8UCw81tVOREmcigCY84", refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbklkIjoiZWNjNzU2NzgtNWQ3Yy00NzJkLTgwMDMtNGUxZWM1YzE2MDdiIiwiaW50ZWdyYXRpb25Vc2VySWQiOiI4MTY1NmI5Ni1iN2E3LTQ0NGQtOTkyNy0yMGIyYzNkN2M2NmEiLCJhY2NvdW50SWQiOiJjYWEzMGUxYS1mZTFiLTRjMzQtODJiMy0zMDFlNzI0YzU2NDIiLCJyZWZyZXNoVG9rZW5JZCI6IjA3MzhmNDM0LTQxZTgtNGJkNC04YjYwLWQ0NWIxNjAyYTgxOSIsImludGVncmF0aW9uQXBpS2V5SWQiOiJiYzEwMzAxNS03M2FlLTRmMGEtYmM0OC1kYjE5ZTg0MjQwMTciLCJpYXQiOjE3NTI1OTMyNzUsImV4cCI6MTc1MjY3OTY3NX0.z-5n2tPfVyZhaln4j7T8lfypySiXP1AP41AuDKiS8fY", accessTokenExpiresAtUnixMs: 1_752_594_775_627
+        accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbklkIjoiYjI4MGFlNTEtMmJlMy00ZmU1LWE4NjYtZGQ1YmM1ODhlZmE3IiwiaW50ZWdyYXRpb25Vc2VySWQiOiJlNzIwNzcyNy02ZjgyLTQ0NTMtYWQ1Yi00MmYwN2E1NmU1ZWUiLCJhY2NvdW50SWQiOiIxMGU5OWYzMC00OWQ3LTRkOWMtYWIxYS0yZTYyNjExOTZhNGIiLCJyZWZyZXNoVG9rZW5JZCI6IjE2YmZiZDU2LWE5YmMtNGI5YS04N2Y3LTE2YmE0NGY2ZTkxOCIsImludGVncmF0aW9uQXBpS2V5SWQiOiJlMGYzNDViYS1hZGJiLTQ5ZTgtYTY2My1mOTE3MjNhNzQ4ZDEiLCJpYXQiOjE3NTI1OTcxMTUsImV4cCI6MTc1MjU5ODkxNX0.YoajeIJWiB3K6jWBM1INE8Q_1eEs7Z5o5XrpBMXqF00", refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbklkIjoiYjI4MGFlNTEtMmJlMy00ZmU1LWE4NjYtZGQ1YmM1ODhlZmE3IiwiaW50ZWdyYXRpb25Vc2VySWQiOiJlNzIwNzcyNy02ZjgyLTQ0NTMtYWQ1Yi00MmYwN2E1NmU1ZWUiLCJhY2NvdW50SWQiOiIxMGU5OWYzMC00OWQ3LTRkOWMtYWIxYS0yZTYyNjExOTZhNGIiLCJyZWZyZXNoVG9rZW5JZCI6IjE2YmZiZDU2LWE5YmMtNGI5YS04N2Y3LTE2YmE0NGY2ZTkxOCIsImludGVncmF0aW9uQXBpS2V5SWQiOiJlMGYzNDViYS1hZGJiLTQ5ZTgtYTY2My1mOTE3MjNhNzQ4ZDEiLCJpYXQiOjE3NTI1OTcxMTUsImV4cCI6MTc1MjY4MzUxNX0.BWO_s8dogiZLcUaINwmkQJFEtXdyWERL3lQtsv-J0zM", accessTokenExpiresAtUnixMs: 1_752_598_615_359
     )
 }
 
@@ -12,7 +12,19 @@ struct CLI {
         do {
             let sdk = SwiftSDK(authFunction: authFn)
             let categories = try await sdk.catalogue.getCategories()
-            print("Categories: \(categories.map { $0.name })")
+            print("Retrieved \(categories.count) categories")
+            for category in categories {
+                let categoryRes = try await sdk.catalogue.getCategory(categoryId: category.id)
+                print("Category: \(categoryRes)")
+                let playlists = try await sdk.catalogue.getPlaylists(categoryId: category.id)
+                for playlist in playlists {
+                    let playlistRes = try await sdk.catalogue.getPlaylist(playlistId: playlist.id)
+                    print("Playlist: \(playlistRes)")
+                    for song in playlistRes.songs {
+                        print("Song: \(song.name)")
+                    }
+                }
+            }
         } catch {
             print("Error: \(error)")
         }

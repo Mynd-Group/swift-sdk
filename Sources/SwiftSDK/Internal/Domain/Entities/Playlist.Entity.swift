@@ -1,11 +1,11 @@
 import Foundation
 
-public protocol PlaylistImageProtocol {
+public protocol PlaylistImageProtocol: Sendable {
     var id: String { get }
     var url: String { get }
 }
 
-public protocol PlaylistProtocol {
+public protocol PlaylistProtocol: Sendable {
     var id: String { get }
     var name: String { get }
     var image: PlaylistImage? { get }
@@ -15,7 +15,7 @@ public protocol PlaylistProtocol {
     var bpm: Int? { get }
 }
 
-public struct PlaylistImage: PlaylistImageProtocol, Decodable {
+public struct PlaylistImage: PlaylistImageProtocol, Decodable, Sendable {
     public let id: String
     public let url: String
 
@@ -25,7 +25,7 @@ public struct PlaylistImage: PlaylistImageProtocol, Decodable {
     }
 }
 
-public struct Playlist: PlaylistProtocol, Decodable {
+public struct Playlist: PlaylistProtocol, Decodable, Sendable {
     public let id: String
     public let name: String
     public let image: PlaylistImage?

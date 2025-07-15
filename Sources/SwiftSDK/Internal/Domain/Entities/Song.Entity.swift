@@ -1,33 +1,33 @@
-public protocol SongHLSProtocol {
+public protocol SongHLSProtocol: Sendable {
     var id: String { get }
     var url: String { get }
     var durationInSeconds: Int { get }
     var urlExpiresAtISO: String { get }
 }
 
-public protocol SongMP3Protocol {
+public protocol SongMP3Protocol: Sendable {
     var id: String { get }
     var url: String { get }
     var durationInSeconds: Int { get }
     var urlExpiresAtISO: String { get }
 }
 
-public protocol SongImageProtocol {
+public protocol SongImageProtocol: Sendable {
     var id: String { get }
     var url: String { get }
 }
 
-public protocol AudioProtocol {
+public protocol AudioProtocol: Sendable {
     var hls: SongHLS { get }
     var mp3: SongMP3 { get }
 }
 
-public protocol ArtistProtocol {
+public protocol ArtistProtocol: Sendable {
     var id: String { get }
     var name: String { get }
 }
 
-public protocol SongProtocol {
+public protocol SongProtocol: Sendable {
     var id: String { get }
     var name: String { get }
     var image: SongImage? { get }
@@ -35,7 +35,7 @@ public protocol SongProtocol {
     var artists: [Artist] { get }
 }
 
-public struct Song: SongProtocol, Decodable {
+public struct Song: SongProtocol, Decodable, Sendable {
     public let id: String
     public let name: String
     public let image: SongImage?
@@ -51,7 +51,7 @@ public struct Song: SongProtocol, Decodable {
     }
 }
 
-public struct SongImage: SongImageProtocol, Decodable {
+public struct SongImage: SongImageProtocol, Decodable, Sendable {
     public let id: String
     public let url: String
 
@@ -61,7 +61,7 @@ public struct SongImage: SongImageProtocol, Decodable {
     }
 }
 
-public struct Artist: ArtistProtocol, Decodable {
+public struct Artist: ArtistProtocol, Decodable, Sendable {
     public let id: String
     public let name: String
 
@@ -71,7 +71,7 @@ public struct Artist: ArtistProtocol, Decodable {
     }
 }
 
-public struct SongHLS: SongHLSProtocol, Decodable {
+public struct SongHLS: SongHLSProtocol, Decodable, Sendable {
     public let id: String
     public let url: String
     public let durationInSeconds: Int
@@ -85,7 +85,7 @@ public struct SongHLS: SongHLSProtocol, Decodable {
     }
 }
 
-public struct SongMP3: SongMP3Protocol, Decodable {
+public struct SongMP3: SongMP3Protocol, Decodable, Sendable {
     public let id: String
     public let url: String
     public let durationInSeconds: Int
@@ -99,7 +99,7 @@ public struct SongMP3: SongMP3Protocol, Decodable {
     }
 }
 
-public struct Audio: AudioProtocol, Decodable {
+public struct Audio: AudioProtocol, Decodable, Sendable {
     public let hls: SongHLS
     public let mp3: SongMP3
 
@@ -108,4 +108,3 @@ public struct Audio: AudioProtocol, Decodable {
         self.mp3 = mp3
     }
 }
-
