@@ -12,7 +12,7 @@ struct CLI {
         do {
             let sdk = SwiftSDK(authFunction: authFn)
             let categories = try await sdk.catalogue.getCategories()
-            print(categories)
+            print("Categories: \(categories.map { $0.name })")
         } catch {
             print("Error: \(error)")
         }
