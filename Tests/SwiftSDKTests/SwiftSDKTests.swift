@@ -342,7 +342,7 @@ struct AuthClientTests {
 
         // THEN – the recorded POST body must contain the refresh token
         let json = await http.latestJSON
-        #expect(json?["refresh_token"] as? String == expired.refreshToken)
+        #expect(json?["refreshToken"] as? String == expired.refreshToken)
 
         // …and still only one refresh hit
         #expect(await http.calls == 1)
