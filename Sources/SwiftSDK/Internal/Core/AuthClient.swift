@@ -144,7 +144,7 @@ public actor AuthClient: AuthClientProtocol {
         print("Current payload: \(currentPayload)")
 
         let url = URL(
-            string: Config.baseUrl.appendingPathComponent("/integration-user/auth/refresh")
+            string: Config.baseUrl.appendingPathComponent("/integration-user/refresh-token")
                 .absoluteString)!
         let headers = ["Content-Type": "application/json"]
         print("Headers: \(headers)")

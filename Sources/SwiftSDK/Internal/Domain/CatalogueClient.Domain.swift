@@ -6,3 +6,4 @@ public protocol CatalogueClientProtocol {
     func getPlaylists(categoryId: String?) async throws -> [PlaylistProtocol]
     func getPlaylist(playlistId: String) async throws -> PlaylistWithSongsProtocol
 }
+
