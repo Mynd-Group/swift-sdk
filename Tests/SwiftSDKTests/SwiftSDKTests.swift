@@ -44,7 +44,7 @@ actor StubAuthProvider {
     /// Callable from AuthClient
     func auth() async throws -> AuthPayloadProtocol {
         calls += 1
-        let idx = min(calls - 1, responses.count - 1)  // clamp to last element
+        let idx = min(calls - 1, responses.count - 1) // clamp to last element
         return try responses[idx].get()
     }
 }
@@ -64,7 +64,8 @@ final class StubHttpClient: HttpClientProtocol, @unchecked Sendable {
     // MARK: – Init
 
     init<ResponseType>(result: Result<ResponseType, Error>)
-    where ResponseType: Decodable & Sendable {
+        where ResponseType: Decodable & Sendable
+    {
         resultBox = { try result.get() }
     }
 
@@ -107,7 +108,7 @@ final class StubHttpClient: HttpClientProtocol, @unchecked Sendable {
 
 private actor BodyStore {
     private var packets = [Data]()
-    func record(_ data: Data) { packets.append(data) }  //  Data is Sendable ✅
+    func record(_ data: Data) { packets.append(data) } //  Data is Sendable ✅
     var last: Data? { packets.last }
 }
 
@@ -203,7 +204,7 @@ struct AuthClientTests {
         let cached = AuthPayload(
             accessToken: "token-B",
             refreshToken: "refresh-B",
-            accessTokenExpiresAtUnixMs: currentUnixTimeMs() + 3600 * 1000  // fresh
+            accessTokenExpiresAtUnixMs: currentUnixTimeMs() + 3600 * 1000 // fresh
         )
         let auth = StubAuthProvider(result: .success(cached))
         let http = StubHttpClient(
@@ -218,7 +219,7 @@ struct AuthClientTests {
 
         // THEN
         #expect(token == cached.accessToken)
-        #expect(await auth.calls == 1)  // still 1
+        #expect(await auth.calls == 1) // still 1
         #expect(await http.calls == 0)
     }
 
@@ -229,7 +230,7 @@ struct AuthClientTests {
         let expired = AuthPayload(
             accessToken: "old-token",
             refreshToken: "refresh-C",
-            accessTokenExpiresAtUnixMs: currentUnixTimeMs() - 60 * 1000  // already expired
+            accessTokenExpiresAtUnixMs: currentUnixTimeMs() - 60 * 1000 // already expired
         )
         let refreshed = AuthPayload(
             accessToken: "new-token",
@@ -248,8 +249,8 @@ struct AuthClientTests {
 
         // THEN
         #expect(token == refreshed.accessToken)
-        #expect(await auth.calls == 1)  // no re-auth
-        #expect(await http.calls == 1)  // exactly one refresh
+        #expect(await auth.calls == 1) // no re-auth
+        #expect(await http.calls == 1) // exactly one refresh
     }
 
     // -------------------------------------------------------------------------
@@ -284,8 +285,8 @@ struct AuthClientTests {
 
         // THEN
         #expect(token == fresh.accessToken)
-        #expect(await http.calls == 1)  // tried to refresh once
-        #expect(await auth.calls == 2)  // initial + fallback
+        #expect(await http.calls == 1) // tried to refresh once
+        #expect(await auth.calls == 2) // initial + fallback
     }
 
     // -------------------------------------------------------------------------
@@ -304,15 +305,15 @@ struct AuthClientTests {
 
         // WHEN – 10 concurrent requests before any cache exists
         let tokens = try await withThrowingTaskGroup(of: String.self) { group in
-            for _ in 0..<10 {
+            for _ in 0 ..< 10 {
                 group.addTask { try await sut.getAccessToken() }
             }
             return try await group.reduce(into: [String]()) { $0.append($1) }
         }
 
         // THEN
-        #expect(Set(tokens) == [payload.accessToken])  // all identical
-        #expect(await auth.calls == 1)  // single flight
+        #expect(Set(tokens) == [payload.accessToken]) // all identical
+        #expect(await auth.calls == 1) // single flight
     }
 
     // -------------------------------------------------------------------------
@@ -322,7 +323,7 @@ struct AuthClientTests {
         let expired = AuthPayload(
             accessToken: "stale",
             refreshToken: "expected-refresh-token",
-            accessTokenExpiresAtUnixMs: currentUnixTimeMs() - 1  // expired
+            accessTokenExpiresAtUnixMs: currentUnixTimeMs() - 1 // expired
         )
         let refreshed = AuthPayload(
             accessToken: "new-access",
@@ -351,18 +352,18 @@ struct AuthClientTests {
     @Test("AuthPayload decodes correctly from server JSON")
     func authPayload_decodesFromJSON() throws {
         // GIVEN – canonical server payload
-        let expiryTimestamp = 1_725_000_000_000  // 2025-02-25 07:20:00 UTC in milliseconds
+        let expiryTimestamp = 1_725_000_000_000 // 2025-02-25 07:20:00 UTC in milliseconds
         let json = """
-            {
-                "accessToken" : "json-access",
-                "refreshToken": "json-refresh",
-                "accessTokenExpiresAtUnixMs"   : \(expiryTimestamp)
-            }
-            """.data(using: .utf8)!
+        {
+            "accessToken" : "json-access",
+            "refreshToken": "json-refresh",
+            "accessTokenExpiresAtUnixMs"   : \(expiryTimestamp)
+        }
+        """.data(using: .utf8)!
 
         // WHEN – decode using the same strategy your HttpClient uses
         let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase  // mirror production
+        decoder.keyDecodingStrategy = .convertFromSnakeCase // mirror production
 
         let payload = try decoder.decode(AuthPayload.self, from: json)
 

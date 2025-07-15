@@ -24,7 +24,7 @@ public struct AuthPayload: AuthPayloadProtocol, Decodable, Encodable {
 }
 
 protocol AuthClientProtocol: Sendable {
-    mutating func getAccessToken() async throws -> String
+    func getAccessToken() async throws -> String
 }
 
 public struct AuthClientConfig {
