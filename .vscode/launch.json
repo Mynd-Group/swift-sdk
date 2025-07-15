@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:swift-sdk}",
+            "name": "Debug terminal-app",
+            "program": "${workspaceFolder:swift-sdk}/.build/debug/terminal-app",
+            "preLaunchTask": "swift: Build Debug terminal-app"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:swift-sdk}",
+            "name": "Release terminal-app",
+            "program": "${workspaceFolder:swift-sdk}/.build/release/terminal-app",
+            "preLaunchTask": "swift: Build Release terminal-app"
+        }
+    ]
+}
