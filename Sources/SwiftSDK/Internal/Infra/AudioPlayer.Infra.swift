@@ -33,6 +33,8 @@ class AudioPlayerInfraService: AudioPlayerProtocol {
         playlist = nil
         player = nil
         playerItems = nil
+
+        setupLooping()
     }
 
     func startPlaylist(playlistWithSongs: PlaylistWithSongs) async {
@@ -76,7 +78,7 @@ class AudioPlayerInfraService: AudioPlayerProtocol {
     }
 
     func setRepeatMode(_ mode: RepeatMode) {
-        logger.info("Setting repeat mode", dictionary: ["mode": repeatMode])
+        logger.info("Setting repeat mode", dictionary: ["mode": mode])
         repeatMode = mode
     }
 
