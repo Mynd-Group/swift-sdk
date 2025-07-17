@@ -4,10 +4,11 @@ protocol SwiftSDKProtocol {
 
 public struct SwiftSDK: SwiftSDKProtocol {
     public let catalogue: CatalogueClientProtocol
+    public let player: AudioPlayerProtocol
 
     public init(
         authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
-    ) {
+    ) async {
         let httpClient = HttpClient()
         let authClient = AuthClient(config: AuthClientConfig(
             authFunction: authFunction,
@@ -24,5 +25,6 @@ public struct SwiftSDK: SwiftSDKProtocol {
         )
 
         catalogue = CatalogueClientInfraService(config: catalogueConfig)
+        player = await AudioPlayerInfraService()
     }
 }
