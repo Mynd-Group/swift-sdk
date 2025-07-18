@@ -55,9 +55,8 @@ public struct PlayerState: PlayerStateProtocol, Sendable {
 }
 
 @MainActor
-public protocol AudioPlayerProtocol {
-    // var playerState: PlayerState { get }
-
+public protocol AudioPlayerProtocol: Sendable {
+    var playerState: PlayerState { get }
     func startPlaylist(playlistWithSongs: PlaylistWithSongs) async
     func play()
     func pause()
