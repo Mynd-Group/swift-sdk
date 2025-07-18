@@ -5,6 +5,7 @@ struct AuthedHttpClientConfig {
     let authClient: AuthClientProtocol
 }
 
+private let log = Logger(prefix: "AuthedHttpClient")
 // TODO: ideally add retries on 401s and 5xxs
 public struct AuthedHttpClient: HttpClientProtocol {
     private let req: HttpClientProtocol
@@ -25,6 +26,7 @@ public struct AuthedHttpClient: HttpClientProtocol {
 
         var authedheaders: [String: String] = headers ?? [:]
         authedheaders["Authorization"] = "Bearer \(accessToken)"
+        log.info("GET \(url) with headers: \(authedheaders)")
 
         return try await req.get(url, headers: authedheaders)
     }
@@ -38,6 +40,7 @@ public struct AuthedHttpClient: HttpClientProtocol {
 
         var authedheaders: [String: String] = headers ?? [:]
         authedheaders["Authorization"] = "Bearer \(accessToken)"
+        log.info("POST \(url) with headers: \(authedheaders) and body: \(body)")
 
         return try await req.post(url, body: body, headers: authedheaders)
     }

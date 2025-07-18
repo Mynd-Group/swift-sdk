@@ -1,4 +1,4 @@
-protocol SwiftSDKProtocol {
+protocol SwiftSDKProtocol: Sendable {
     var catalogue: CatalogueClientProtocol { get }
 }
 
@@ -10,6 +10,7 @@ public struct SwiftSDK: SwiftSDKProtocol {
         authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
     ) async {
         let httpClient = HttpClient()
+
         let authClient = AuthClient(config: AuthClientConfig(
             authFunction: authFunction,
             httpClient: httpClient

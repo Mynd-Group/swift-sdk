@@ -353,13 +353,18 @@ struct AuthClientTests {
     func authPayload_decodesFromJSON() throws {
         // GIVEN – canonical server payload
         let expiryTimestamp = 1_725_000_000_000 // 2025-02-25 07:20:00 UTC in milliseconds
-        let json = """
+        let jsonString = """
         {
             "accessToken" : "json-access",
             "refreshToken": "json-refresh",
             "accessTokenExpiresAtUnixMs"   : \(expiryTimestamp)
         }
-        """.data(using: .utf8)!
+        """
+        
+        guard let json = jsonString.data(using: .utf8) else {
+            XCTFail("Failed to convert JSON string to Data")
+            return
+        }
 
         // WHEN – decode using the same strategy your HttpClient uses
         let decoder = JSONDecoder()

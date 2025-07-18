@@ -40,6 +40,7 @@ public struct AuthClientConfig {
     }
 }
 
+private let log = Logger(prefix: "AuthClient")
 public actor AuthClient: AuthClientProtocol {
     // MARK: – Dependencies
 
@@ -60,25 +61,33 @@ public actor AuthClient: AuthClientProtocol {
 
     private func handleNoAuthPayload() async throws -> String {
         defer { authPayloadTask = nil }
-        print("No auth data, using auth function")
+        log.info("No auth payload, launching auth function")
         authPayloadTask = Task { () throws -> AuthPayloadProtocol in
-            print("Launching auth function")
+            log.info("Launching auth function")
             let payload = try await self.authFunction()
-            print("Auth function returned payload: \(payload)")
+            log.info("Auth function returned payload: \(payload)")
             return payload
         }
-        let payload = try await authPayloadTask!.value
+        guard let task = authPayloadTask else {
+            log.error("Auth payload task is nil")
+            throw AuthError.impossibleState
+        }
+        let payload = try await task.value
         authPayload = payload
         return try await handleValidAuthPayload()
     }
 
     private func handleExpiredAuthPayload() async throws -> String {
         defer { authPayloadTask = nil }
-        print("Token is expired, refreshing")
+        log.info("Token is expired, refreshing")
         authPayloadTask = Task { () throws -> AuthPayloadProtocol in
             do {
                 let payload = try await self.refreshAccessToken()
-                return payload!
+                guard let payload = payload else {
+                    log.error("Refresh token returned nil payload")
+                    throw AuthError.invalidRefreshToken
+                }
+                return payload
             } catch {
                 // TODO: we should only do this on some errors
                 do {
@@ -90,22 +99,34 @@ public actor AuthClient: AuthClientProtocol {
             }
         }
 
-        let payload = try await authPayloadTask!.value
+        guard let task = authPayloadTask else {
+            log.error("Auth payload task is nil in expired handler")
+            throw AuthError.impossibleState
+        }
+        let payload = try await task.value
         authPayload = payload
         return try await handleValidAuthPayload()
     }
 
     private func handleOutstandingTask() async throws -> String {
-        print("Outstanding task, waiting for it to finish")
-        let payload = try await authPayloadTask!.value
+        log.info("Outstanding task, waiting for it to finish")
+        guard let task = authPayloadTask else {
+            log.error("Auth payload task is nil in outstanding handler")
+            throw AuthError.impossibleState
+        }
+        let payload = try await task.value
         authPayload = payload
-        print("Task finished, returning token")
+        log.info("Task finished, returning token")
         return try await handleValidAuthPayload()
     }
 
     private func handleValidAuthPayload() async throws -> String {
-        print("Token is not expired, returning token")
-        return authPayload!.accessToken
+        log.info("Token is not expired, returning token")
+        guard let payload = authPayload else {
+            log.error("Auth payload is nil when trying to get access token")
+            throw AuthError.impossibleState
+        }
+        return payload.accessToken
     }
 
     // MARK: – Public
@@ -119,7 +140,7 @@ public actor AuthClient: AuthClientProtocol {
                 return try await handleNoAuthPayload()
             }
 
-            let isExpired = authPayload != nil && authPayload!.isExpired
+            let isExpired = authPayload?.isExpired ?? false
 
             // Auth payload present but expired
             if isExpired {
@@ -135,20 +156,21 @@ public actor AuthClient: AuthClientProtocol {
     // MARK: – Private helpers
 
     private func refreshAccessToken() async throws -> AuthPayloadProtocol? {
-        print("Refreshing access token")
+        log.info("Refreshing access token")
         guard let currentPayload = authPayload else {
-            print("No current payload")
+            log.info("No current payload")
             throw AuthError.invalidRefreshToken
         }
 
-        print("Current payload: \(currentPayload)")
+        log.info("Current payload: \(currentPayload)")
 
-        let url = URL(
+        guard let url = URL(
             string: Config.baseUrl.appendingPathComponent("/integration-user/refresh-token")
-                .absoluteString)!
+                .absoluteString) else {
+            log.error("Failed to create refresh token URL")
+            throw AuthError.impossibleState
+        }
         let headers = ["Content-Type": "application/json"]
-        print("Headers: \(headers)")
-        print("URL: \(url)")
 
         struct RefreshRequest: Encodable, Decodable {
             let refreshToken: String
@@ -159,10 +181,10 @@ public actor AuthClient: AuthClientProtocol {
                 url, body: RefreshRequest(refreshToken: currentPayload.refreshToken),
                 headers: headers
             )
-            print("Response: \(response)")
+            log.info("Response: \(response)")
             return response
         } catch URLError.badServerResponse {
-            print("Bad server response")
+            log.info("Bad server response")
             throw AuthError.invalidRefreshToken
         }
     }
