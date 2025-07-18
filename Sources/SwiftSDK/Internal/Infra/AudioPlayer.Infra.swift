@@ -1,14 +1,14 @@
 import AVFoundation
 
-extension Song {
-    fileprivate func toAVPlayerItem() async -> AVPlayerItem {
+private extension Song {
+    func toAVPlayerItem() async -> AVPlayerItem {
         let url = URL(string: audio.mp3.url)!
         return await AVPlayerItem(asset: AVAsset(url: url))
     }
 }
 
-extension PlaylistWithSongs {
-    fileprivate func toAVPlayerItems() async -> [AVPlayerItem] {
+private extension PlaylistWithSongs {
+    func toAVPlayerItems() async -> [AVPlayerItem] {
         return await withTaskGroup(of: AVPlayerItem.self) { group in
             for song in songs {
                 group.addTask {
@@ -22,7 +22,8 @@ extension PlaylistWithSongs {
 
 let logger = Logger(prefix: "AudioPlayer")
 @MainActor
-class AudioPlayerInfraService {
+class AudioPlayerInfraService: AudioPlayerProtocol {
+    var playerState: PlayerState
     private var playlist: PlaylistWithSongs?
     private var player: AVQueuePlayer?
     private var playerItems: [AVPlayerItem]?
@@ -33,6 +34,13 @@ class AudioPlayerInfraService {
         playlist = nil
         player = nil
         playerItems = nil
+        playerState = PlayerState(
+            activeSong: nil,
+            activePlaylist: nil,
+            playbackStatus: .idle,
+            repeatMode: .none,
+            volume: 1.0
+        )
 
         setupLooping()
     }
@@ -43,14 +51,16 @@ class AudioPlayerInfraService {
             dictionary: [
                 "playlistId": playlistWithSongs.playlist,
                 "songsCount": playlistWithSongs.songs.count,
-            ])
+            ]
+        )
         guard !playlistWithSongs.songs.isEmpty else {
             logger.warn(
                 "Cannot start an empty playlist",
                 dictionary: [
                     "playlistId": playlistWithSongs.playlist,
                     "songsCount": playlistWithSongs.songs.count,
-                ])
+                ]
+            )
             return
         }
 
