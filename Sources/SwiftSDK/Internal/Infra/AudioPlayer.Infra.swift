@@ -1,150 +1,453 @@
 import AVFoundation
+import Combine
+import MediaPlayer
 
-private extension Song {
-    func toAVPlayerItem() async -> AVPlayerItem {
-        let url = URL(string: audio.mp3.url)!
-        return await AVPlayerItem(asset: AVAsset(url: url))
+private let log = Logger(prefix: "AudioPlayerService")
+public final class AudioPlayerService: AudioPlayer, ObservableObject {
+    // MARK: - Published State
+
+    @Published public private(set) var state: PlayerState
+    @Published public private(set) var isPlaying: Bool = false
+
+    // MARK: - Events
+
+    private let eventsSubject = PassthroughSubject<PlayerEvent, Never>()
+    public var events: AnyPublisher<PlayerEvent, Never> {
+        eventsSubject.eraseToAnyPublisher()
     }
-}
 
-private extension PlaylistWithSongs {
-    func toAVPlayerItems() async -> [AVPlayerItem] {
-        return await withTaskGroup(of: AVPlayerItem.self) { group in
-            for song in songs {
-                group.addTask {
-                    await song.toAVPlayerItem()
-                }
-            }
-            return await group.reduce(into: []) { $0.append($1) }
-        }
-    }
-}
+    // MARK: - Private Properties
 
-let logger = Logger(prefix: "AudioPlayer")
-@MainActor
-class AudioPlayerInfraService: AudioPlayerProtocol {
-    var playerState: PlayerState
-    private var playlist: PlaylistWithSongs?
     private var player: AVQueuePlayer?
-    private var playerItems: [AVPlayerItem]?
-    private var currentItemIndex: Int = 0
-    private var repeatMode: RepeatMode = .none
+    private var playerItems: [AVPlayerItem] = []
+    private var currentPlaylist: PlaylistWithSongs?
+    private var progressObserver: Any?
+    private var cancellables = Set<AnyCancellable>()
+    private var itemToIndexMap: [AVPlayerItem: Int] = [:]
 
-    init() {
-        playlist = nil
-        player = nil
-        playerItems = nil
-        playerState = PlayerState(
-            activeSong: nil,
-            activePlaylist: nil,
-            playbackStatus: .idle,
+    // MARK: - Initialization
+
+    public init() {
+        state = PlayerState(
+            status: .stopped,
+            currentTime: 0,
+            totalTime: 0,
+            currentTrackIndex: 0,
+            totalTracks: 0,
             repeatMode: .none,
-            volume: 1.0
         )
 
-        setupLooping()
+        configureAudioSession()
+        setupNotifications()
     }
 
-    func startPlaylist(playlistWithSongs: PlaylistWithSongs) async {
-        logger.info(
-            "Starting playlist",
-            dictionary: [
-                "playlistId": playlistWithSongs.playlist,
-                "songsCount": playlistWithSongs.songs.count,
-            ]
-        )
-        guard !playlistWithSongs.songs.isEmpty else {
-            logger.warn(
-                "Cannot start an empty playlist",
-                dictionary: [
-                    "playlistId": playlistWithSongs.playlist,
-                    "songsCount": playlistWithSongs.songs.count,
-                ]
-            )
+    // MARK: - Public Methods
+
+    public func play(playlist: PlaylistWithSongs) async {
+        guard !playlist.songs.isEmpty else {
+            log.info("AudioPlayerService: Cannot play empty playlist")
+            eventsSubject.send(.errorOccurred(AudioPlayerError.emptyPlaylist))
             return
         }
 
-        logger.debug("Converting songs to AVPlayerItems")
-        let items = await playlistWithSongs.toAVPlayerItems()
-        setPlayerWithNewItems(items: items)
+        // Do heavy work off main thread
+        let items: [AVPlayerItem] = playlist.songs.compactMap { song in
+            guard let url = URL(string: song.audio.mp3.url) else {
+                log.info("AudioPlayerService: Invalid URL for song: \(song.name)")
+                return nil
+            }
+            let asset = AVAsset(url: url)
+            return AVPlayerItem(asset: asset)
+        }
+
+        guard !items.isEmpty else {
+            log.info("AudioPlayerService: No valid audio URLs found")
+            await MainActor.run {
+                eventsSubject.send(.errorOccurred(AudioPlayerError.invalidAudioURL))
+            }
+            return
+        }
+
+        // Set up index mapping off main thread
+        var indexMap: [AVPlayerItem: Int] = [:]
+        for (index, item) in items.enumerated() {
+            indexMap[item] = index
+        }
+
+        // Now do the main thread work quickly
+        cleanupPlayer()
+        currentPlaylist = playlist
+        playerItems = items
+        itemToIndexMap = indexMap
+
+        player = AVQueuePlayer(items: playerItems)
+        player?.automaticallyWaitsToMinimizeStalling = true
+        player?.allowsExternalPlayback = true
+
+        setupPlayerObservers()
+        setupProgressObserver()
+        setupRemoteCommandCenter()
+
+        updateState(status: .playing)
+        player?.play()
     }
 
-    func play() {
+    public func resume() {
         guard let player = player else {
-            logger.error("Cannot play, player is nil")
+            log.info("AudioPlayerService: Cannot resume - no player available")
             return
         }
-        logger.info("Playing current item", dictionary: ["currentItemIndex": currentItemIndex])
+      
+      // This is needed to correctly recover from interuptions
+      // i hope - testing
+      #if os(iOS)
+       // Ensure audio session is active
+       do {
+           try AVAudioSession.sharedInstance().setActive(true)
+       } catch {
+           log.error("Failed to activate audio session in resume: \(error)")
+           eventsSubject.send(.errorOccurred(error))
+           return
+       }
+       #endif
+      
+      
         player.play()
+        isPlaying = true
+        updateState(status: .playing)
     }
 
-    func pause() {
+    public func pause() {
         guard let player = player else {
-            logger.error("Cannot pause, player is nil")
+            log.info("AudioPlayerService: Cannot pause - no player available")
             return
         }
-
-        logger.info("Pausing current item", dictionary: ["currentItemIndex": currentItemIndex])
-
         player.pause()
+        isPlaying = false
+        updateState(status: .paused)
     }
 
-    func destroy() {
-        player?.pause()
-        player = nil
-        playerItems = nil
-        currentItemIndex = 0
-        logger.info("Player destroyed")
+    public func setRepeatMode(_ mode: RepeatMode) {
+        updateState(repeatMode: mode)
     }
 
-    func setRepeatMode(_ mode: RepeatMode) {
-        logger.info("Setting repeat mode", dictionary: ["mode": mode])
-        repeatMode = mode
+    public func stop() {
+        cleanupPlayer()
+        isPlaying = false
+        updateState(status: .stopped)
     }
 
-    private func setupLooping() {
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: nil,
+    // MARK: - Private Setup
+
+    private func configureAudioSession() {
+        #if os(iOS)
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(
+                    .playback, mode: .default, options: [.allowAirPlay, .allowBluetooth])
+                try session.setActive(true)
+                log.info("AudioPlayerService: Audio session configured for background playback")
+            } catch {
+                log.info("AudioPlayerService: Failed to configure audio session: \(error)")
+                eventsSubject.send(.errorOccurred(error))
+            }
+        #endif
+    }
+
+    private func setupNotifications() {
+        NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                if let item = notification.object as? AVPlayerItem {
+                    self?.handleItemDidPlayToEnd(item)
+                }
+            }
+            .store(in: &cancellables)
+
+        #if os(iOS)
+            NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] notification in
+                    self?.handleInterruption(notification)
+                }
+                .store(in: &cancellables)
+        #endif
+    }
+
+    private func setupPlayerObservers() {
+        guard let player = player else { return }
+
+        player.publisher(for: \.timeControlStatus)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                switch status {
+                case .playing:
+                    self?.isPlaying = true
+                    self?.updateState(status: .playing)
+                    self?.eventsSubject.send(.bufferingStateChanged(isBuffering: false))
+                case .paused:
+                    self?.isPlaying = false
+                    self?.updateState(status: .paused)
+                case .waitingToPlayAtSpecifiedRate:
+                    self?.eventsSubject.send(.bufferingStateChanged(isBuffering: true))
+                    self?.updateState(status: .buffering)
+                @unknown default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+
+        player.publisher(for: \.currentItem)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] item in
+                self?.handleCurrentItemChanged(item)
+            }
+            .store(in: &cancellables)
+
+        for item in playerItems {
+            item.publisher(for: \.status)
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] status in
+                    if status == .failed, let error = item.error {
+                        log.info("AudioPlayerService: Player item failed: \(error)")
+                        self?.eventsSubject.send(.errorOccurred(error))
+                    }
+                }
+                .store(in: &cancellables)
+        }
+    }
+
+    private func setupProgressObserver() {
+        guard let player = player else { return }
+
+        let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        progressObserver = player.addPeriodicTimeObserver(
+            forInterval: interval,
             queue: .main
-        ) { [weak self] notification in
-            let item = notification.object as? AVPlayerItem
-            Task { @MainActor in
-                self?.handleItemEnd(item!)
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateProgress()
             }
         }
     }
 
-    private func handleItemEnd(_ item: AVPlayerItem) {
-        guard item == player?.currentItem else { return }
+    // MARK: - Remote Commands
 
-        switch repeatMode {
-        case .loopSong:
-            // Restart current song
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            self?.resume()
+            return .success
+        }
+
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            self?.pause()
+            return .success
+        }
+
+        commandCenter.skipForwardCommand.isEnabled = false
+        commandCenter.skipBackwardCommand.isEnabled = false
+        commandCenter.nextTrackCommand.isEnabled = false
+        commandCenter.previousTrackCommand.isEnabled = false
+        commandCenter.changePlaybackPositionCommand.isEnabled = false
+        commandCenter.seekForwardCommand.isEnabled = false
+        commandCenter.seekBackwardCommand.isEnabled = false
+
+        updateNowPlayingInfo()
+    }
+
+    // MARK: - Event Handlers
+
+    private func handleCurrentItemChanged(_ item: AVPlayerItem?) {
+        guard let item = item,
+            let index = itemToIndexMap[item]
+        else { return }
+
+        eventsSubject.send(.trackStarted(index: index))
+        updateProgress()
+        updateNowPlayingInfo()
+    }
+
+    private func handleItemDidPlayToEnd(_ item: AVPlayerItem) {
+        guard let index = itemToIndexMap[item] else { return }
+
+        eventsSubject.send(.trackCompleted(index: index))
+
+        switch state.repeatMode {
+        case .none:
+            if player?.items().isEmpty == true {
+                eventsSubject.send(.playlistCompleted)
+                updateState(status: .stopped)
+            }
+
+        case .one:
             item.seek(to: .zero) { [weak self] _ in
-                Task {
-                    await self?.player?.play()
+                Task { @MainActor in
+                    self?.player?.play()
                 }
             }
 
-        case .loopPlaylist:
-            // Check if we're at the end of the queue
+        case .all:
             if player?.items().isEmpty == true {
-                setPlayerWithNewItems(items: playerItems!)
+                eventsSubject.send(.playlistCompleted)
+                if let playlist = currentPlaylist {
+                    Task {
+                        await self.play(playlist: playlist)
+                    }
+                }
             }
-        // Otherwise, AVQueuePlayer will advance automatically
-
-        case .none:
-            // Let it naturally end or advance
-            break
         }
     }
 
-    private func setPlayerWithNewItems(items: [AVPlayerItem]) {
-        logger.info("Resetting player with new items", dictionary: ["itemsCount": items.count])
+    #if os(iOS)
+        @MainActor
+        private func handleInterruption(_ notification: Notification) {
+          log
+            .info(
+              "AudioPlayerService: handleInterruption",
+              dictionary: ["notification": notification]
+            )
+            guard let userInfo = notification.userInfo,
+                let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+            else {
+                log.info("AudioPlayerService: Invalid interruption notification")
+                return
+            }
+
+            switch type {
+            case .began:
+                log.info("AudioPlayerService: Interruption began, pausing playback")
+                pause()
+            case .ended:
+                log.info("AudioPlayerService: Interruption ended")
+                if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
+                    let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+                    if options.contains(.shouldResume) {
+                        log.info("AudioPlayerService: Resuming playback after interruption")
+                        resume()
+                    } else {
+                        log.info("AudioPlayerService: Interruption ended but should not resume")
+                    }
+                }
+            @unknown default:
+                log.info("AudioPlayerService: Unknown interruption type")
+                break
+            }
+        }
+    #endif
+
+    // MARK: - State Updates
+
+    private func updateState(
+        status: PlayerState.PlaybackStatus? = nil,
+        repeatMode: RepeatMode? = nil
+    ) {
+        let currentIndex = getCurrentTrackIndex()
+        let progress = calculateProgress()
+
+        state = PlayerState(
+            status: status ?? state.status,
+            currentTime: progress.current,
+            totalTime: progress.total,
+            currentTrackIndex: currentIndex,
+            totalTracks: playerItems.count,
+            repeatMode: repeatMode ?? state.repeatMode
+        )
+    }
+
+    private func updateProgress() {
+        let progress = calculateProgress()
+        let currentIndex = getCurrentTrackIndex()
+
+        if abs(state.currentTime - progress.current) > 0.05
+            || state.currentTrackIndex != currentIndex
+        {
+            updateState()
+        }
+    }
+
+    // MARK: - Now Playing Info
+
+    private func updateNowPlayingInfo() {
+        guard let playlist = currentPlaylist else { return }
+
+        var info = [String: Any]()
+        info[MPMediaItemPropertyTitle] = playlist.playlist.name
+        info[MPMediaItemPropertyArtist] = "MyndStream"
+        info[MPMediaItemPropertyPlaybackDuration] = state.totalTime
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = state.currentTime
+        info[MPNowPlayingInfoPropertyPlaybackRate] = player?.rate ?? 0
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    // MARK: - Helper Methods
+
+    private func calculateProgress() -> (current: TimeInterval, total: TimeInterval) {
+        guard let player = player,
+            let currentItem = player.currentItem
+        else {
+            return (0, 0)
+        }
+
+        var totalTime: TimeInterval = 0
+        var currentTime: TimeInterval = 0
+        let currentIndex = getCurrentTrackIndex()
+
+        // REFACTOR: the base of this could be done once on item change
+        // we don't need to calculate the duration up to now each time
+        for item in playerItems {
+            let duration = item.asset.duration.seconds
+            if !duration.isNaN && !duration.isInfinite {
+                totalTime += duration
+            }
+        }
+
+        for (index, item) in playerItems.enumerated() {
+            if index < currentIndex {
+                let duration = item.asset.duration.seconds
+                if !duration.isNaN && !duration.isInfinite {
+                    currentTime += duration
+                }
+            } else if index == currentIndex {
+                let itemTime = currentItem.currentTime().seconds
+                if !itemTime.isNaN {
+                    currentTime += itemTime
+                }
+                break
+            }
+        }
+
+        return (currentTime, totalTime)
+    }
+
+    private func getCurrentTrackIndex() -> Int {
+        guard let currentItem = player?.currentItem,
+            let index = itemToIndexMap[currentItem]
+        else {
+            return 0
+        }
+        return index
+    }
+
+    private func cleanupPlayer() {
+        if let observer = progressObserver {
+            player?.removeTimeObserver(observer)
+            progressObserver = nil
+        }
+
         player?.pause()
-        player = AVQueuePlayer(items: items)
-        currentItemIndex = 0
-        player!.play()
+        player = nil
+        playerItems.removeAll()
+        itemToIndexMap.removeAll()
+        cancellables.removeAll()
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }

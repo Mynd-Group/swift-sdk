@@ -6,7 +6,7 @@ let package = Package(
 
     platforms: [
         .iOS(.v14),
-        .macOS(.v11),
+        .macOS(.v10_15),
     ],
 
     products: [
@@ -18,7 +18,7 @@ let package = Package(
 
         // Optional: make the CLI runnable/dispatchable via SPM
         .executable(
-            name: "terminal-app", // any lowercase name you like
+            name: "terminal-app",  // any lowercase name you like
             targets: ["TerminalApp"]
         ),
     ],

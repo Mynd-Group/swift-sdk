@@ -1,65 +1,128 @@
-import struct Foundation.TimeInterval
+import AVFoundation
+import Combine
+import Foundation
 
-public enum RepeatMode: Sendable {
+// MARK: - Core Types
+
+public enum RepeatMode {
     case none
-    case loopSong
-    case loopPlaylist
+    case one
+    case all
 }
 
-public enum PlaybackStatus: Equatable, Sendable {
-    case idle
-    case loading
-    case playing
-    case paused
-    case stopped
-    case error(String)
+public enum PlayerEvent {
+    case trackStarted(index: Int)
+    case trackCompleted(index: Int)
+    case playlistCompleted
+    case errorOccurred(Error)
+    case bufferingStateChanged(isBuffering: Bool)
+    case airPlayStateChanged(isActive: Bool)
 }
 
-public protocol ActiveSongProtocol: Sendable {
-    var song: SongProtocol { get }
-    var progress: TimeInterval { get }
-    var index: Int { get }
-}
+// MARK: - Player State
 
-public struct ActiveSong: ActiveSongProtocol, Sendable {
-    public let song: SongProtocol
-    public let progress: TimeInterval
-    public let index: Int
-
-    public init(song: SongProtocol, progress: TimeInterval, index: Int) {
-        self.song = song
-        self.progress = progress
-        self.index = index
+public struct PlayerState: Equatable {
+    public enum PlaybackStatus: Equatable {
+        case stopped
+        case playing
+        case paused
+        case buffering
     }
-}
 
-public protocol PlayerStateProtocol: Sendable {
-    var activeSong: ActiveSong? { get }
-    var playbackStatus: PlaybackStatus { get }
-    var repeatMode: RepeatMode { get }
-    var volume: Float { get }
-}
-
-public struct PlayerState: PlayerStateProtocol, Sendable {
-    public let activeSong: ActiveSong?
-    public let playbackStatus: PlaybackStatus
+    public let status: PlaybackStatus
+    public let currentTime: TimeInterval
+    public let totalTime: TimeInterval
+    public let currentTrackIndex: Int
+    public let totalTracks: Int
     public let repeatMode: RepeatMode
-    public let volume: Float
 
-    public init(activeSong: ActiveSong?, activePlaylist _: PlaylistProtocol?, playbackStatus: PlaybackStatus, repeatMode: RepeatMode, volume: Float) {
-        self.activeSong = activeSong
-        self.playbackStatus = playbackStatus
+    public init(
+        status: PlaybackStatus,
+        currentTime: TimeInterval,
+        totalTime: TimeInterval,
+        currentTrackIndex: Int,
+        totalTracks: Int,
+        repeatMode: RepeatMode
+    ) {
+        self.status = status
+        self.currentTime = currentTime
+        self.totalTime = totalTime
+        self.currentTrackIndex = currentTrackIndex
+        self.totalTracks = totalTracks
         self.repeatMode = repeatMode
-        self.volume = volume
+    }
+
+    public var progress: Double {
+        totalTime > 0 ? currentTime / totalTime : 0
+    }
+
+    public var remainingTime: TimeInterval {
+        max(0, totalTime - currentTime)
+    }
+
+    public static func == (lhs: PlayerState, rhs: PlayerState) -> Bool {
+        lhs.status == rhs.status && abs(lhs.currentTime - rhs.currentTime) < 0.5  // Allow small time differences
+            && lhs.totalTime == rhs.totalTime && lhs.currentTrackIndex == rhs.currentTrackIndex
+            && lhs.totalTracks == rhs.totalTracks && lhs.repeatMode == rhs.repeatMode
     }
 }
+
+// MARK: - Main Player Protocol
 
 @MainActor
-public protocol AudioPlayerProtocol: Sendable {
-    var playerState: PlayerState { get }
-    func startPlaylist(playlistWithSongs: PlaylistWithSongs) async
-    func play()
+public protocol AudioPlayer: ObservableObject {
+    /// Current player state - observe this for UI updates
+    var state: PlayerState { get }
+
+    /// Simple playing state for convenience
+    var isPlaying: Bool { get }
+
+    /// Events stream for one-time notifications
+    var events: AnyPublisher<PlayerEvent, Never> { get }
+
+    /// Start playing a playlist
+    func play(playlist: PlaylistWithSongs) async
+
+    /// Resume playback
+    func resume()
+
+    /// Pause playback
     func pause()
-    func destroy()
+
+    /// Set repeat mode
     func setRepeatMode(_ mode: RepeatMode)
+
+    /// Stop and cleanup
+    func stop()
+}
+
+// MARK: - Convenience Extensions
+
+extension AudioPlayer {
+    /// Publisher that emits only when status changes
+    public var statusPublisher: AnyPublisher<PlayerState.PlaybackStatus, Never> {
+        events
+            .compactMap { _ in nil as PlayerState.PlaybackStatus? }
+            .prepend(state.status)
+            .eraseToAnyPublisher()
+    }
+
+    /// Publisher for progress percentage (0.0 to 1.0)
+    public var progressPublisher: AnyPublisher<Double, Never> {
+        events
+            .compactMap { _ in nil as Double? }
+            .prepend(state.progress)
+            .eraseToAnyPublisher()
+    }
+}
+
+// MARK: - Error Types
+
+public struct AudioPlayerError: LocalizedError {
+    public let message: String
+
+    public var errorDescription: String? { message }
+
+    public static let emptyPlaylist = AudioPlayerError(message: "Cannot play an empty playlist")
+    public static let invalidAudioURL = AudioPlayerError(message: "Invalid audio URL")
 }
