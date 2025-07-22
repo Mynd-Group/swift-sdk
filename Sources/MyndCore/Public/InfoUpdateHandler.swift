@@ -15,10 +15,10 @@ struct InfoUpdate {
 
 struct NowPlayingInfoCenterHandler {
     private(set) var isEnabled = false
-    
+
     mutating func enable()  { isEnabled = true  }
     mutating func disable() { isEnabled = false }
-    
+
     mutating func update(_ update: InfoUpdate) {
         guard isEnabled else { return }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = [

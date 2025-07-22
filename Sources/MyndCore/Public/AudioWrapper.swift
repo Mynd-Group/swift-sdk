@@ -11,10 +11,10 @@ public protocol AudioClientProtocol: AnyObject {
     var events:   AnyPublisher<AudioPlayerEvent, Never> { get }
     var state:    PlaybackState        { get }
     var progress: PlaybackProgress     { get }
-    
+
     /// Convenience flag
     var isPlaying: Bool { get }
-    
+
     /// Current context (optional helpers)
     var currentSong:     Song?              { get }
     var currentPlaylist: PlaylistWithSongs? { get }
@@ -24,7 +24,7 @@ public protocol AudioClientProtocol: AnyObject {
     func pause()
     func resume()
     func stop() async
-    
+
     func setRepeatMode(_ mode: RepeatMode)
 }
 
@@ -44,56 +44,60 @@ public final class AudioClient: AudioClientProtocol {
   public var currentPlaylist: PlaylistWithSongs? {
     if core.currentPlaylist == nil { return nil }
     return core.currentPlaylist
-    
+
   }
-    
+
     // MARK: -- Opt-in flags
   public struct Configuration: Sendable {
         public var handleInterruptions: Bool = true
         public var handleInfoItemUpdates: Bool = true
         public var handleAudioSession: Bool = true
-        
+        public var handleCommandCenter: Bool = true
+
         public init() {}
     }
-    
+
     // MARK: -- Public surface
     public var events: AnyPublisher<AudioPlayerEvent, Never> { core.events }
     public var state: PlaybackState { core.state }
     public var progress: PlaybackProgress { core.progress }
-    
-    // MARK: -- Private
+
+        // MARK: -- Private
     private let core = CoreAudioPlayer()
-    
+
     private var interruptionHandler = InterruptionHandler()
     private var sessionHandler = AudioSessionHandler()
     private var nowPlayingHandler = NowPlayingInfoCenterHandler()
-    
+    private var commandCenterHandler = CommandCenterHandler()
+
     private var cancellables = Set<AnyCancellable>()
     private let cfg: Configuration
-    
+
     // MARK: -- Init
     public init(configuration: Configuration = .init()) {
         cfg = configuration
         setupAuxiliaryPipelines()
     }
-    
+
+
+
     // MARK: -- Public player controls ----------------------------------------------------------
     public func play(_ playlist: PlaylistWithSongs) async {
         _ = try? activateSessionIfNeeded()
         await core.play(playlist)
     }
-    
+
     public func pause() { core.pause() }
-  
+
     public func resume() { core.resume() }
-  
+
     public func stop() async {
         await core.stop()
         deactivateSessionIfNeeded()
     }
-  
+
     public func setRepeatMode(_ mode: RepeatMode) { core.setRepeatMode(mode) }
-    
+
     // MARK: -- Helpers -------------------------------------------------------------------------
     private func setupAuxiliaryPipelines() {
   #if os(iOS)
@@ -116,10 +120,10 @@ public final class AudioClient: AudioClientProtocol {
         }
 
         interruptionHandler.enable(callback)
-        
+
         }
-        
-      if cfg.handleAudioSession {
+
+            if cfg.handleAudioSession {
             core.events
                 .sink { [weak self] event in
                     guard let self else { return }
@@ -133,15 +137,34 @@ public final class AudioClient: AudioClientProtocol {
                     }
                 }
                 .store(in: &cancellables)
-            
+
             nowPlayingHandler.enable()
+        }
+
+        if cfg.handleCommandCenter {
+            commandCenterHandler.enable(
+                onPlay: { [weak self] in
+                    self?.core.resume()
+                },
+                onPause: { [weak self] in
+                    self?.core.pause()
+                },
+                onTogglePlayPause: { [weak self] in
+                    guard let self = self else { return }
+                    if self.core.isPlaying {
+                        self.core.pause()
+                    } else {
+                        self.core.resume()
+                    }
+                }
+            )
         }
       #endif
     }
-    
+
     private func updateNowPlayingInfo(for state: PlaybackState) {
         guard case .playing(_, _) = state else { return }
-        
+
         let info = InfoUpdate(
             titleName: core.currentPlaylist?.playlist.name ?? "Unknown",
             artistName: "MyndGroup",
@@ -149,10 +172,10 @@ public final class AudioClient: AudioClientProtocol {
             currentTime: core.progress.playlistCurrentTime,
             rate: 1.0
         )
-      
+
         nowPlayingHandler.update(info)
     }
-    
+
     private func activateSessionIfNeeded() throws -> Bool {
         guard cfg.handleAudioSession else { return false }
         do {
@@ -165,7 +188,7 @@ public final class AudioClient: AudioClientProtocol {
             return false
         }
     }
-    
+
     private func deactivateSessionIfNeeded() {
         if cfg.handleAudioSession {
           #if os(iOS)
