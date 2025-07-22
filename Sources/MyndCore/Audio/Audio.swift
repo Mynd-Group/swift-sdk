@@ -19,7 +19,7 @@ extension PlaylistWithSongs {
           await song.toAVPlayerItem()
         }
       }
-      
+
       // Collect results and filter out nils
       var playerItems: [AVPlayerItem] = []
       for await playerItem in group {
@@ -41,6 +41,14 @@ public struct PlaybackProgress: Equatable {
   // Playlist-level progress
   public let playlistCurrentTime: TimeInterval
   public let playlistDuration: TimeInterval
+
+  public init(trackCurrentTime: TimeInterval, trackDuration: TimeInterval, trackIndex: Int, playlistCurrentTime: TimeInterval, playlistDuration: TimeInterval) {
+    self.trackCurrentTime = trackCurrentTime
+    self.trackDuration = trackDuration
+    self.trackIndex = trackIndex
+    self.playlistCurrentTime = playlistCurrentTime
+    self.playlistDuration = playlistDuration
+  }
 
   // Computed properties for track
   public var trackProgress: Double {
@@ -352,23 +360,28 @@ public final class CoreAudioPlayer {
   @MainActor
   private func updateProgressFromPlayer() {
     guard let currentItem = player?.currentItem,
-      currentPlaylist != nil
+          let playlist = currentPlaylist
     else { return }
 
     // Find current item index
     // NOTE: potential bug if there are multiple of the same song here
     guard let index = playerItems.firstIndex(of: currentItem) else { return }
 
+    // Ensure index is within bounds
+    guard index < playlist.songs.count else { return }
+
     let trackCurrentTime = currentItem.currentTime().seconds
 
     Task {
-      // Load duration asynchronously
+      // Use duration from Song entity instead of AVAsset
       let trackDuration: TimeInterval
       if let cachedDuration = songDurations[index] {
         trackDuration = cachedDuration
       } else {
-        let duration = currentItem.asset.duration.seconds
-        trackDuration = duration
+        // Get duration from the song entity (avoid blocking main thread)
+        let song = playlist.songs[index]
+        let durationFromSong = TimeInterval(song.audio.mp3.durationInSeconds)
+        trackDuration = durationFromSong
         if !trackDuration.isNaN && !trackDuration.isInfinite {
           songDurations[index] = trackDuration
         }
@@ -405,6 +418,10 @@ public final class CoreAudioPlayer {
     currentSongIndex: Int,
     currentSongTime: TimeInterval
   ) async -> (current: TimeInterval, total: TimeInterval) {
+    guard let playlist = currentPlaylist else {
+      return (0, 0)
+    }
+
     var playlistCurrentTime: TimeInterval = 0
     var playlistDuration: TimeInterval = 0
 
@@ -414,13 +431,14 @@ public final class CoreAudioPlayer {
       if let cachedDuration = songDurations[index] {
         duration = cachedDuration
       } else {
-
-        let assetDuration = item.asset.duration.seconds
-        duration = assetDuration
+        // Use duration from Song entity instead of AVAsset (avoid blocking main thread)
+        guard index < playlist.songs.count else { continue }
+        let song = playlist.songs[index]
+        let songDuration = TimeInterval(song.audio.mp3.durationInSeconds)
+        duration = songDuration
         if !duration.isNaN && !duration.isInfinite {
           songDurations[index] = duration
         }
-
       }
 
       if !duration.isNaN && !duration.isInfinite {

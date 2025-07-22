@@ -3,12 +3,13 @@ import AVFoundation
 
 public final class MyndSDK {
     public let catalogue: CatalogueClientProtocol
-    public let player:    AudioClientProtocol
-
+    public let player: AudioClientProtocol
+    
+    @MainActor
     public init(
         authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
         audioConfiguration: AudioClient.Configuration = .init()
-    ) async {
+    ) {
         let httpClient   = HttpClient()
         let authClient   = AuthClient(
             config: .init(
@@ -27,10 +28,6 @@ public final class MyndSDK {
         )
         let catalogueService = CatalogueClientInfraService(config: catalogueConfig)
         self.catalogue = catalogueService
-
-
-        self.player = await MainActor.run {
-            AudioClient(configuration: audioConfiguration)
-        }
+        self.player = AudioClient(configuration: audioConfiguration)
     }
 }

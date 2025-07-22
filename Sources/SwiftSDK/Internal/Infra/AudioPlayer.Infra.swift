@@ -97,21 +97,20 @@ public final class AudioPlayerService: AudioPlayer, ObservableObject {
             log.info("AudioPlayerService: Cannot resume - no player available")
             return
         }
-      
-      // This is needed to correctly recover from interuptions
-      // i hope - testing
-      #if os(iOS)
-       // Ensure audio session is active
-       do {
-           try AVAudioSession.sharedInstance().setActive(true)
-       } catch {
-           log.error("Failed to activate audio session in resume: \(error)")
-           eventsSubject.send(.errorOccurred(error))
-           return
-       }
-       #endif
-      
-      
+
+        // This is needed to correctly recover from interuptions
+        // i hope - testing
+        #if os(iOS)
+            // Ensure audio session is active
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                log.error("Failed to activate audio session in resume: \(error)")
+                eventsSubject.send(.errorOccurred(error))
+                return
+            }
+        #endif
+
         player.play()
         isPlaying = true
         updateState(status: .playing)
@@ -307,11 +306,11 @@ public final class AudioPlayerService: AudioPlayer, ObservableObject {
     #if os(iOS)
         @MainActor
         private func handleInterruption(_ notification: Notification) {
-          log
-            .info(
-              "AudioPlayerService: handleInterruption",
-              dictionary: ["notification": notification]
-            )
+            log
+                .info(
+                    "AudioPlayerService: handleInterruption",
+                    dictionary: ["notification": notification]
+                )
             guard let userInfo = notification.userInfo,
                 let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
                 let type = AVAudioSession.InterruptionType(rawValue: typeValue)

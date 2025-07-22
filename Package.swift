@@ -2,44 +2,35 @@
 import PackageDescription
 
 let package = Package(
-    name: "SwiftSDK",
+    name: "MyndCore",
 
     platforms: [
         .iOS(.v14),
-        .macOS(.v10_15),
+        .macOS(.v14)
     ],
 
     products: [
-        // Your library (unchanged)
+        .library(
+            name: "MyndCore",
+            targets: ["MyndCore"]
+        ),
         .library(
             name: "SwiftSDK",
             targets: ["SwiftSDK"]
         ),
-
-        // Optional: make the CLI runnable/dispatchable via SPM
-        .executable(
-            name: "terminal-app",  // any lowercase name you like
-            targets: ["TerminalApp"]
-        ),
     ],
-
     targets: [
         // Library target
         .target(
+            name: "MyndCore"
+        ),
+        .target(
             name: "SwiftSDK"
         ),
-
-        // CLI target (folder: Sources/TerminalApp)
-        .executableTarget(
-            name: "TerminalApp",
-            dependencies: ["SwiftSDK"]
-            // , path: "Sources/TerminalApp"   // add if the folder is not the default
-        ),
-
         // Test target
         .testTarget(
-            name: "SwiftSDKTests",
-            dependencies: ["SwiftSDK"]
+            name: "MyndCoreTests",
+            dependencies: ["MyndCore"]
         ),
     ]
 )
