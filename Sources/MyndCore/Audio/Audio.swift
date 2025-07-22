@@ -30,6 +30,27 @@ extension PlaylistWithSongs {
       return playerItems
     }
   }
+
+    func calculateProgress(
+    currentTrackIndex: Int,
+    currentTrackTime: TimeInterval
+  ) -> (currentTime: TimeInterval, totalDuration: TimeInterval) {
+    var playlistCurrentTime: TimeInterval = 0
+    var playlistTotalDuration: TimeInterval = 0
+
+    for (index, song) in songs.enumerated() {
+      let songDuration = TimeInterval(song.audio.mp3.durationInSeconds)
+      playlistTotalDuration += songDuration
+
+      if index < currentTrackIndex {
+        playlistCurrentTime += songDuration
+      } else if index == currentTrackIndex {
+        playlistCurrentTime += currentTrackTime
+      }
+    }
+
+    return (playlistCurrentTime, playlistTotalDuration)
+  }
 }
 
 public struct PlaybackProgress: Equatable {
@@ -136,7 +157,7 @@ public final class CoreAudioPlayer {
   private var playerItems: [AVPlayerItem] = []
   private var cancellables = Set<AnyCancellable>()
   private var progressObserver: Any?
-  private var songDurations: [Int: TimeInterval] = [:]  // Cache song durations
+
 
   // MARK: - Lifecycle
 
@@ -193,7 +214,6 @@ public final class CoreAudioPlayer {
       playlistDuration: 0
     )
     currentPlaylist = nil
-    songDurations.removeAll()
     eventSubject.send(.stateChanged(state))
   }
 
@@ -225,7 +245,6 @@ public final class CoreAudioPlayer {
 
     // Reset tracking
     currentSongIndex = 0
-    songDurations.removeAll()
 
     // Set initial playing state
     if let firstSong = playlistWithSongs.songs.first {
@@ -360,102 +379,34 @@ public final class CoreAudioPlayer {
   @MainActor
   private func updateProgressFromPlayer() {
     guard let currentItem = player?.currentItem,
-          let playlist = currentPlaylist
+          let playlist = currentPlaylist,
+          let index = playerItems.firstIndex(of: currentItem),
+          index < playlist.songs.count
     else { return }
 
-    // Find current item index
-    // NOTE: potential bug if there are multiple of the same song here
-    guard let index = playerItems.firstIndex(of: currentItem) else { return }
-
-    // Ensure index is within bounds
-    guard index < playlist.songs.count else { return }
-
     let trackCurrentTime = currentItem.currentTime().seconds
+    let trackDuration = TimeInterval(playlist.songs[index].audio.mp3.durationInSeconds)
 
-    Task {
-      // Use duration from Song entity instead of AVAsset
-      let trackDuration: TimeInterval
-      if let cachedDuration = songDurations[index] {
-        trackDuration = cachedDuration
-      } else {
-        // Get duration from the song entity (avoid blocking main thread)
-        let song = playlist.songs[index]
-        let durationFromSong = TimeInterval(song.audio.mp3.durationInSeconds)
-        trackDuration = durationFromSong
-        if !trackDuration.isNaN && !trackDuration.isInfinite {
-          songDurations[index] = trackDuration
-        }
-      }
+    let (playlistCurrentTime, playlistDuration) = playlist.calculateProgress(
+      currentTrackIndex: index,
+      currentTrackTime: trackCurrentTime
+    )
 
-      if !trackCurrentTime.isNaN && !trackDuration.isNaN
-        && !trackDuration.isInfinite
-      {
-        // Calculate playlist progress
-        let (playlistCurrentTime, playlistDuration) =
-          await calculatePlaylistProgress(
-            currentSongIndex: index,
-            currentSongTime: trackCurrentTime
-          )
+    let newProgress = PlaybackProgress(
+      trackCurrentTime: trackCurrentTime,
+      trackDuration: trackDuration,
+      trackIndex: index,
+      playlistCurrentTime: playlistCurrentTime,
+      playlistDuration: playlistDuration
+    )
 
-        let newProgress = PlaybackProgress(
-          trackCurrentTime: trackCurrentTime,
-          trackDuration: trackDuration,
-          trackIndex: index,
-          playlistCurrentTime: playlistCurrentTime,
-          playlistDuration: playlistDuration
-        )
-
-        if newProgress != progress {
-          progress = newProgress
-          eventSubject.send(.progressUpdated(newProgress))
-        }
-      }
+    if newProgress != progress {
+      progress = newProgress
+      eventSubject.send(.progressUpdated(newProgress))
     }
   }
 
-  @MainActor
-  private func calculatePlaylistProgress(
-    currentSongIndex: Int,
-    currentSongTime: TimeInterval
-  ) async -> (current: TimeInterval, total: TimeInterval) {
-    guard let playlist = currentPlaylist else {
-      return (0, 0)
-    }
 
-    var playlistCurrentTime: TimeInterval = 0
-    var playlistDuration: TimeInterval = 0
-
-    // Calculate total duration and time up to current song
-    for (index, item) in playerItems.enumerated() {
-      let duration: TimeInterval
-      if let cachedDuration = songDurations[index] {
-        duration = cachedDuration
-      } else {
-        // Use duration from Song entity instead of AVAsset (avoid blocking main thread)
-        guard index < playlist.songs.count else { continue }
-        let song = playlist.songs[index]
-        let songDuration = TimeInterval(song.audio.mp3.durationInSeconds)
-        duration = songDuration
-        if !duration.isNaN && !duration.isInfinite {
-          songDurations[index] = duration
-        }
-      }
-
-      if !duration.isNaN && !duration.isInfinite {
-        playlistDuration += duration
-
-        if index < currentSongIndex {
-          // Add full duration of completed songs
-          playlistCurrentTime += duration
-        } else if index == currentSongIndex {
-          // Add current time of current song
-          playlistCurrentTime += currentSongTime
-        }
-      }
-    }
-
-    return (playlistCurrentTime, playlistDuration)
-  }
 
   private func clearQueue() {
     guard let player = player else { return }
@@ -506,6 +457,5 @@ public final class CoreAudioPlayer {
 
     player = nil
     playerItems.removeAll()
-    songDurations.removeAll()
   }
 }
