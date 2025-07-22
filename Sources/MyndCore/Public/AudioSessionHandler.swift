@@ -8,7 +8,7 @@ struct AudioSessionHandler {
 
 #if os(iOS)
     func activate(
-        options: [AVAudioSession.CategoryOptions] = [.allowAirPlay, .allowBluetooth],
+        options: [AVAudioSession.CategoryOptions] = [],
         mode: AVAudioSession.Mode = .default,
         category: AVAudioSession.Category = .playback
     ) throws {
