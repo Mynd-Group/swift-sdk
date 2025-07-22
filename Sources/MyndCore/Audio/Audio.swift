@@ -3,35 +3,28 @@ import Combine
 import Observation
 
 extension Song {
-  func toAVPlayerItem() async -> AVPlayerItem?  {
+  @MainActor
+  func toAVPlayerItem() -> AVPlayerItem? {
     guard let url = URL(string: self.audio.mp3.url) else { return nil }
+    print("Song name: \(self.name), url: \(url)")
     let asset = AVAsset(url: url)
-    return await AVPlayerItem(asset: asset)
+    return AVPlayerItem(asset: asset)
   }
 }
 
 extension PlaylistWithSongs {
+  @MainActor
   func toAvPlayerItems() async -> [AVPlayerItem] {
-    await withTaskGroup(of: AVPlayerItem?.self) { group in
-      // Add tasks for each song
-      for song in self.songs {
-        group.addTask {
-          await song.toAVPlayerItem()
-        }
+    var items: [AVPlayerItem] = []
+    for song in self.songs {
+      if let item = await song.toAVPlayerItem() {
+        items.append(item)
       }
-
-      // Collect results and filter out nils
-      var playerItems: [AVPlayerItem] = []
-      for await playerItem in group {
-        if let playerItem = playerItem {
-          playerItems.append(playerItem)
-        }
-      }
-      return playerItems
     }
+    return items
   }
 
-    func calculateProgress(
+  func calculateProgress(
     currentTrackIndex: Int,
     currentTrackTime: TimeInterval
   ) -> (currentTime: TimeInterval, totalDuration: TimeInterval) {
@@ -63,7 +56,13 @@ public struct PlaybackProgress: Equatable {
   public let playlistCurrentTime: TimeInterval
   public let playlistDuration: TimeInterval
 
-  public init(trackCurrentTime: TimeInterval, trackDuration: TimeInterval, trackIndex: Int, playlistCurrentTime: TimeInterval, playlistDuration: TimeInterval) {
+  public init(
+    trackCurrentTime: TimeInterval,
+    trackDuration: TimeInterval,
+    trackIndex: Int,
+    playlistCurrentTime: TimeInterval,
+    playlistDuration: TimeInterval
+  ) {
     self.trackCurrentTime = trackCurrentTime
     self.trackDuration = trackDuration
     self.trackIndex = trackIndex
@@ -103,6 +102,7 @@ public enum AudioPlayerEvent {
   case songCompleted(Song, index: Int)
   case playlistCompleted
   case errorOccurred(Error)
+  case volumeChanged(Float)
 }
 
 // MARK: - Audio Player Errors
@@ -122,7 +122,6 @@ public enum AudioError: LocalizedError {
 }
 
 public final class CoreAudioPlayer {
-  // MARK: - Observable State (Thread-Safe)
 
   public private(set) var state: PlaybackState = .idle
   public private(set) var progress: PlaybackProgress = PlaybackProgress(
@@ -136,12 +135,30 @@ public final class CoreAudioPlayer {
   public private(set) var currentSongIndex: Int = 0
   public private(set) var currentPlaylist: PlaylistWithSongs?
   public var repeatMode: RepeatMode = .none
+  private(set) var volume: Float = 1.0
 
   // MARK: - Computed Properties
 
   public var isPlaying: Bool {
     if case .playing = state { return true }
     return false
+  }
+
+  // MARK: - Volume Control
+
+  public func setVolume(_ newValue: Float) {
+    guard newValue >= 0.0, newValue <= 1.0 else {
+      print("[CoreAudioPlayer] Volume out of bounds: \(newValue)")
+      return
+    }
+    if volume != newValue {
+      volume = newValue
+      if let player = player {
+        player.volume = newValue
+      }
+      print("[CoreAudioPlayer] Volume set to \(newValue)")
+      eventSubject.send(.volumeChanged(newValue))
+    }
   }
 
   // MARK: - Events Publisher
@@ -157,7 +174,6 @@ public final class CoreAudioPlayer {
   private var playerItems: [AVPlayerItem] = []
   private var cancellables = Set<AnyCancellable>()
   private var progressObserver: Any?
-
 
   // MARK: - Lifecycle
 
@@ -215,6 +231,8 @@ public final class CoreAudioPlayer {
     )
     currentPlaylist = nil
     eventSubject.send(.stateChanged(state))
+    print(">>> Player stopped <<<")
+  
   }
 
   public func setRepeatMode(_ mode: RepeatMode) {
@@ -234,11 +252,12 @@ public final class CoreAudioPlayer {
     if player == nil {
       player = AVQueuePlayer()
       player?.automaticallyWaitsToMinimizeStalling = true
+      player?.volume = volume
       setupObservers()
+    } else {
+      // Clear existing queue
+      clearQueue()
     }
-
-    // Clear existing queue
-    clearQueue()
 
     // Store references first
     playerItems = items
@@ -256,14 +275,10 @@ public final class CoreAudioPlayer {
     // add items to queue
     items.forEach { player?.insert($0, after: nil) }
 
+    player?.play()
     // Update progress
     updateProgressFromPlayer()
 
-    // Only actually start playing if we're still in playing state
-    // (user might have paused while items were loading)
-    if case .playing = state {
-      player?.play()
-    }
   }
 
   @MainActor
@@ -281,7 +296,6 @@ public final class CoreAudioPlayer {
     // Track current item changes
     player.publisher(for: \.currentItem)
       .removeDuplicates()
-      .compactMap { $0 }
       .sink { [weak self] item in
         self?.handleCurrentItemChanged(item)
       }
@@ -308,15 +322,16 @@ public final class CoreAudioPlayer {
   }
 
   @MainActor
-  private func handleItemDidPlayToEnd(_ item: AVPlayerItem)  {
+  private func handleItemDidPlayToEnd(_ item: AVPlayerItem) {
     guard let playlist = currentPlaylist,
-      currentSongIndex < playlist.songs.count
+      let itemIndex = playerItems.firstIndex(of: item),
+      itemIndex < playlist.songs.count
     else { return }
 
-    let song = playlist.songs[currentSongIndex]
-    eventSubject.send(.songCompleted(song, index: currentSongIndex))
+    let song = playlist.songs[itemIndex]
+    eventSubject.send(.songCompleted(song, index: itemIndex))
 
-    let isLastSong = currentSongIndex == playlist.songs.count - 1
+    let isLastSong = itemIndex == playlist.songs.count - 1
 
     switch repeatMode {
     case .none:
@@ -325,41 +340,57 @@ public final class CoreAudioPlayer {
         eventSubject.send(.playlistCompleted)
         print("Playlist completed - stopping")
       } else {
-        currentSongIndex += 1
-        print("Moving to next song: \(currentSongIndex)")
+        // AVQueuePlayer automatically advances to next item
+        print("Song \(itemIndex) completed, advancing to next")
       }
 
     case .all:
       if isLastSong {
         eventSubject.send(.playlistCompleted)
         print("Playlist completed - restarting for repeat all")
-        Task{ await replayAllSongs() }
+        Task { await replayAllSongs() }
       } else {
-        currentSongIndex += 1
-        print("Moving to next song: \(currentSongIndex)")
+        // AVQueuePlayer automatically advances to next item
+        print("Song \(itemIndex) completed, advancing to next")
       }
     }
   }
 
-  private func handleCurrentItemChanged(_ item: AVPlayerItem) {
+  @MainActor
+  private func handleCurrentItemChanged(_ item: AVPlayerItem?) {
+    guard let item = item else {
+      print("Current item is nil - queue ended")
+      currentSong = nil
+      return
+    }
+
     guard let playlist = currentPlaylist,
-      let player = player,
-      let currentItem = player.currentItem,
-      currentItem == item
-    else { return }
-
-    // Find the index of the current item in our playerItems array
-    if let itemIndex = playerItems.firstIndex(of: item),
+      let itemIndex = playerItems.firstIndex(of: item),
       itemIndex < playlist.songs.count
-    {
-      let song = playlist.songs[itemIndex]
-      currentSong = song
-      currentSongIndex = itemIndex
+    else {
+      print("Could not find item in playerItems or index out of bounds")
+      return
+    }
 
-      if case .playing = state {
-        state = .playing(song, index: itemIndex)
-        eventSubject.send(.stateChanged(state))
-      }
+    let song = playlist.songs[itemIndex]
+    print(
+      "🎵 Current item changed to index \(itemIndex): \(song.name ?? "Unknown")"
+    )
+
+    // ALWAYS update these
+    currentSong = song
+    currentSongIndex = itemIndex
+
+    // Update state based on player status
+    switch player?.timeControlStatus {
+    case .playing:
+      state = .playing(song, index: itemIndex)
+      eventSubject.send(.stateChanged(state))
+    case .paused:
+      state = .paused(song, index: itemIndex)
+      eventSubject.send(.stateChanged(state))
+    default:
+      break
     }
   }
 
@@ -385,14 +416,15 @@ public final class CoreAudioPlayer {
   @MainActor
   private func updateProgressFromPlayer() {
     guard let currentItem = player?.currentItem,
-          let playlist = currentPlaylist,
-          let index = playerItems.firstIndex(of: currentItem),
-          index < playlist.songs.count
+      let playlist = currentPlaylist,
+      let index = playerItems.firstIndex(of: currentItem),
+      index < playlist.songs.count
     else { return }
 
     let trackCurrentTime = currentItem.currentTime().seconds
-    let trackDuration = TimeInterval(playlist.songs[index].audio.mp3.durationInSeconds)
+    let trackDuration = currentItem.duration
 
+    // Use the actual item index, not currentSongIndex
     let (playlistCurrentTime, playlistDuration) = playlist.calculateProgress(
       currentTrackIndex: index,
       currentTrackTime: trackCurrentTime
@@ -400,7 +432,7 @@ public final class CoreAudioPlayer {
 
     let newProgress = PlaybackProgress(
       trackCurrentTime: trackCurrentTime,
-      trackDuration: trackDuration,
+      trackDuration: trackDuration.seconds,
       trackIndex: index,
       playlistCurrentTime: playlistCurrentTime,
       playlistDuration: playlistDuration
@@ -411,8 +443,6 @@ public final class CoreAudioPlayer {
       eventSubject.send(.progressUpdated(newProgress))
     }
   }
-
-
 
   private func clearQueue() {
     guard let player = player else { return }
@@ -441,6 +471,8 @@ public final class CoreAudioPlayer {
     currentSongIndex = 0
     if let firstSong = playlist.songs.first {
       currentSong = firstSong
+      state = .playing(firstSong, index: 0)
+      eventSubject.send(.stateChanged(state))
     }
 
     player?.play()

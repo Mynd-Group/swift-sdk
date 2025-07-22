@@ -18,8 +18,6 @@ struct AudioSessionHandler {
         log.debug("Audio session activated")
     }
 
-
-
     func deactivate() {
         try? AVAudioSession.sharedInstance().setActive(false)
         log.debug("Audio session deactivated")

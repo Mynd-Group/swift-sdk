@@ -28,6 +28,7 @@ class AudioPlayerViewModel: ObservableObject {
     @Published var currentSong: Song?
     @Published var currentPlaylist: PlaylistWithSongs?
     @Published var repeatMode: RepeatMode = .none
+    @Published var volume: Float = 1.0
 
     init() {
         self.sdk = MyndSDK(authFunction: authFn)
@@ -41,6 +42,7 @@ class AudioPlayerViewModel: ObservableObject {
                 self?.handlePlayerEvent(event)
             }
             .store(in: &cancellables)
+        self.volume = sdk.player.volume
     }
 
     private func handlePlayerEvent(_ event: AudioPlayerEvent) {
@@ -56,6 +58,8 @@ class AudioPlayerViewModel: ObservableObject {
             self.currentPlaylist = playlist
         case .errorOccurred(let error):
             self.errorMessage = error.localizedDescription
+        case .volumeChanged(let volume):
+            self.volume = volume
         default:
             break
         }
@@ -125,6 +129,13 @@ class AudioPlayerViewModel: ObservableObject {
         repeatMode = newMode
         sdk.player.setRepeatMode(newMode)
         print("Repeat mode changed to: \(newMode)")
+    }
+
+    func setVolume(_ value: Float) {
+        let clamped = min(max(value, 0.0), 1.0)
+        sdk.player.setVolume(clamped)
+        volume = clamped
+        print("Set volume to \(clamped)")
     }
 }
 
@@ -368,6 +379,15 @@ struct PlayerControlsView: View {
                 Text("Repeat: \(repeatModeDescription(viewModel.repeatMode))")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                HStack {
+                    Text("Volume")
+                    Slider(value: Binding(
+                        get: { viewModel.volume },
+                        set: { viewModel.setVolume($0) }
+                    ), in: 0...1)
+                    .frame(width: 120)
+                    Text(String(format: "%d%%", Int(viewModel.volume * 100)))
+                }
             }
         }
     }
