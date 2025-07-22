@@ -27,6 +27,7 @@ class AudioPlayerViewModel: ObservableObject {
     )
     @Published var currentSong: Song?
     @Published var currentPlaylist: PlaylistWithSongs?
+    @Published var repeatMode: RepeatMode = .none
 
     init() {
         self.sdk = MyndSDK(authFunction: authFn)
@@ -117,6 +118,13 @@ class AudioPlayerViewModel: ObservableObject {
 
     func stop() async {
         await sdk.player.stop()
+    }
+
+    func toggleRepeatMode() {
+        let newMode: RepeatMode = repeatMode == .none ? .all : .none
+        repeatMode = newMode
+        sdk.player.setRepeatMode(newMode)
+        print("Repeat mode changed to: \(newMode)")
     }
 }
 
@@ -344,12 +352,23 @@ struct PlayerControlsView: View {
                         .font(.title)
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button(action: viewModel.toggleRepeatMode) {
+                    Image(systemName: viewModel.repeatMode == .none ? "repeat" : "repeat.1")
+                        .font(.title2)
+                        .foregroundColor(viewModel.repeatMode == .none ? .secondary : .accentColor)
+                }
             }
 
             // State Display
-            Text(stateDescription(viewModel.playbackState))
-                .font(.caption)
-                .foregroundColor(.secondary)
+            VStack(spacing: 2) {
+                Text(stateDescription(viewModel.playbackState))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Repeat: \(repeatModeDescription(viewModel.repeatMode))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
@@ -370,6 +389,15 @@ struct PlayerControlsView: View {
             return "Paused (Track \(index + 1))"
         case .stopped:
             return "Stopped"
+        }
+    }
+
+    func repeatModeDescription(_ mode: RepeatMode) -> String {
+        switch mode {
+        case .none:
+            return "Off"
+        case .all:
+            return "All"
         }
     }
 }

@@ -316,21 +316,27 @@ public final class CoreAudioPlayer {
     let song = playlist.songs[currentSongIndex]
     eventSubject.send(.songCompleted(song, index: currentSongIndex))
 
+    let isLastSong = currentSongIndex == playlist.songs.count - 1
+
     switch repeatMode {
     case .none:
-      if player?.items().isEmpty == true {
+      if isLastSong {
         state = .stopped
         eventSubject.send(.playlistCompleted)
+        print("Playlist completed - stopping")
       } else {
         currentSongIndex += 1
+        print("Moving to next song: \(currentSongIndex)")
       }
 
     case .all:
-      if player?.items().isEmpty == true {
+      if isLastSong {
         eventSubject.send(.playlistCompleted)
+        print("Playlist completed - restarting for repeat all")
         Task{ await replayAllSongs() }
       } else {
         currentSongIndex += 1
+        print("Moving to next song: \(currentSongIndex)")
       }
     }
   }
