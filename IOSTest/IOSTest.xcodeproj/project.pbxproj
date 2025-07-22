@@ -7,13 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2B026B212E2911CC0014D0FA /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2B026B202E2911CC0014D0FA /* SwiftSDK */; };
-		2B026B242E2912130014D0FA /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2B026B232E2912130014D0FA /* SwiftSDK */; };
-		2B3C514C2E2A943F00B5F0C7 /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2B3C514B2E2A943F00B5F0C7 /* SwiftSDK */; };
+		2B5254BC2E2FB0D700AA52A3 /* MyndCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2B5254BB2E2FB0D700AA52A3 /* MyndCore */; };
 		2BA3CB662E2EA66B00797E97 /* MyndCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA3CB652E2EA66B00797E97 /* MyndCore */; };
-		2BE550952E2A914300F22836 /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2BE550942E2A914300F22836 /* SwiftSDK */; };
-		2BE550A62E2A91F300F22836 /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2BE550A52E2A91F300F22836 /* SwiftSDK */; };
-		2BE550A92E2A92CC00F22836 /* SwiftSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 2BE550A82E2A92CC00F22836 /* SwiftSDK */; };
 		2BEE40FB2E2E9FCF000322DD /* MyndCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2BEE40FA2E2E9FCF000322DD /* MyndCore */; };
 		2BEE40FE2E2EA024000322DD /* MyndCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2BEE40FD2E2EA024000322DD /* MyndCore */; };
 /* End PBXBuildFile section */
@@ -54,15 +49,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2B026B212E2911CC0014D0FA /* SwiftSDK in Frameworks */,
 				2BEE40FE2E2EA024000322DD /* MyndCore in Frameworks */,
 				2BEE40FB2E2E9FCF000322DD /* MyndCore in Frameworks */,
-				2B3C514C2E2A943F00B5F0C7 /* SwiftSDK in Frameworks */,
 				2BA3CB662E2EA66B00797E97 /* MyndCore in Frameworks */,
-				2BE550A92E2A92CC00F22836 /* SwiftSDK in Frameworks */,
-				2BE550952E2A914300F22836 /* SwiftSDK in Frameworks */,
-				2B026B242E2912130014D0FA /* SwiftSDK in Frameworks */,
-				2BE550A62E2A91F300F22836 /* SwiftSDK in Frameworks */,
+				2B5254BC2E2FB0D700AA52A3 /* MyndCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,15 +111,10 @@
 			);
 			name = IOSTest;
 			packageProductDependencies = (
-				2B026B202E2911CC0014D0FA /* SwiftSDK */,
-				2B026B232E2912130014D0FA /* SwiftSDK */,
-				2BE550942E2A914300F22836 /* SwiftSDK */,
-				2BE550A52E2A91F300F22836 /* SwiftSDK */,
-				2BE550A82E2A92CC00F22836 /* SwiftSDK */,
-				2B3C514B2E2A943F00B5F0C7 /* SwiftSDK */,
 				2BEE40FA2E2E9FCF000322DD /* MyndCore */,
 				2BEE40FD2E2EA024000322DD /* MyndCore */,
 				2BA3CB652E2EA66B00797E97 /* MyndCore */,
+				2B5254BB2E2FB0D700AA52A3 /* MyndCore */,
 			);
 			productName = IOSTest;
 			productReference = 2B026AF52E2910FC0014D0FA /* IOSTest.app */;
@@ -208,7 +193,7 @@
 			mainGroup = 2B026AEC2E2910FC0014D0FA;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				2BA3CB642E2EA66B00797E97 /* XCLocalSwiftPackageReference "../../swift-sdk" */,
+				2B5254BA2E2FB0D700AA52A3 /* XCLocalSwiftPackageReference "../../swift-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B026AF62E2910FC0014D0FA /* Products */;
@@ -575,40 +560,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		2BA3CB642E2EA66B00797E97 /* XCLocalSwiftPackageReference "../../swift-sdk" */ = {
+		2B5254BA2E2FB0D700AA52A3 /* XCLocalSwiftPackageReference "../../swift-sdk" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "../../swift-sdk";
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2B026B202E2911CC0014D0FA /* SwiftSDK */ = {
+		2B5254BB2E2FB0D700AA52A3 /* MyndCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
-		};
-		2B026B232E2912130014D0FA /* SwiftSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
-		};
-		2B3C514B2E2A943F00B5F0C7 /* SwiftSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
+			productName = MyndCore;
 		};
 		2BA3CB652E2EA66B00797E97 /* MyndCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MyndCore;
-		};
-		2BE550942E2A914300F22836 /* SwiftSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
-		};
-		2BE550A52E2A91F300F22836 /* SwiftSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
-		};
-		2BE550A82E2A92CC00F22836 /* SwiftSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SwiftSDK;
 		};
 		2BEE40FA2E2E9FCF000322DD /* MyndCore */ = {
 			isa = XCSwiftPackageProductDependency;
