@@ -6,7 +6,6 @@ extension Song {
   @MainActor
   func toAVPlayerItem() -> AVPlayerItem? {
     guard let url = URL(string: self.audio.mp3.url) else { return nil }
-    print("Song name: \(self.name), url: \(url)")
     let asset = AVAsset(url: url)
     return AVPlayerItem(asset: asset)
   }
@@ -184,6 +183,7 @@ public final class CoreAudioPlayer {
   // MARK: - Public Thread-Safe API
   @MainActor
   public func play(_ playlistWithSongs: PlaylistWithSongs) async {
+    print(">>> Playlist selected \(playlistWithSongs.playlist.name) <<<")
     guard !playlistWithSongs.songs.isEmpty else {
       state = .stopped
       eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
@@ -232,7 +232,7 @@ public final class CoreAudioPlayer {
     currentPlaylist = nil
     eventSubject.send(.stateChanged(state))
     print(">>> Player stopped <<<")
-  
+
   }
 
   public func setRepeatMode(_ mode: RepeatMode) {
@@ -359,7 +359,7 @@ public final class CoreAudioPlayer {
   @MainActor
   private func handleCurrentItemChanged(_ item: AVPlayerItem?) {
     guard let item = item else {
-      print("Current item is nil - queue ended")
+      print("🚧 Current item is nil")
       currentSong = nil
       return
     }
