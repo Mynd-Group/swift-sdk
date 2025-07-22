@@ -14,20 +14,11 @@ let package = Package(
             name: "MyndCore",
             targets: ["MyndCore"]
         ),
-        .library(
-            name: "SwiftSDK",
-            targets: ["SwiftSDK"]
-        ),
     ],
     targets: [
-        // Library target
         .target(
             name: "MyndCore"
         ),
-        .target(
-            name: "SwiftSDK"
-        ),
-        // Test target
         .testTarget(
             name: "MyndCoreTests",
             dependencies: ["MyndCore"]
