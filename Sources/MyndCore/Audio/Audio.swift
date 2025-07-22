@@ -120,6 +120,8 @@ public enum AudioError: LocalizedError {
   }
 }
 
+
+private let log = Logger(prefix: "CoreAudioPlayer")
 public final class CoreAudioPlayer {
 
   public private(set) var state: PlaybackState = .idle
@@ -147,7 +149,7 @@ public final class CoreAudioPlayer {
 
   public func setVolume(_ newValue: Float) {
     guard newValue >= 0.0, newValue <= 1.0 else {
-      print("[CoreAudioPlayer] Volume out of bounds: \(newValue)")
+      log.info("Volume out of bounds: \(newValue)")
       return
     }
     if volume != newValue {
@@ -155,7 +157,7 @@ public final class CoreAudioPlayer {
       if let player = player {
         player.volume = newValue
       }
-      print("[CoreAudioPlayer] Volume set to \(newValue)")
+      log.info("Volume set to \(newValue)")
       eventSubject.send(.volumeChanged(newValue))
     }
   }
@@ -183,7 +185,7 @@ public final class CoreAudioPlayer {
   // MARK: - Public Thread-Safe API
   @MainActor
   public func play(_ playlistWithSongs: PlaylistWithSongs) async {
-    print(">>> Playlist selected \(playlistWithSongs.playlist.name) <<<")
+    log.info(">>> Playlist selected \(playlistWithSongs.playlist.name) <<<")
     guard !playlistWithSongs.songs.isEmpty else {
       state = .stopped
       eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
@@ -231,7 +233,7 @@ public final class CoreAudioPlayer {
     )
     currentPlaylist = nil
     eventSubject.send(.stateChanged(state))
-    print(">>> Player stopped <<<")
+    log.info(">>> Player stopped <<<")
 
   }
 
@@ -338,20 +340,20 @@ public final class CoreAudioPlayer {
       if isLastSong {
         state = .stopped
         eventSubject.send(.playlistCompleted)
-        print("Playlist completed - stopping")
+        log.info("Playlist completed - stopping")
       } else {
         // AVQueuePlayer automatically advances to next item
-        print("Song \(itemIndex) completed, advancing to next")
+        log.info("Song \(itemIndex) completed, advancing to next")
       }
 
     case .all:
       if isLastSong {
         eventSubject.send(.playlistCompleted)
-        print("Playlist completed - restarting for repeat all")
+        log.info("Playlist completed - restarting for repeat all")
         Task { await replayAllSongs() }
       } else {
         // AVQueuePlayer automatically advances to next item
-        print("Song \(itemIndex) completed, advancing to next")
+        log.info("Song \(itemIndex) completed, advancing to next")
       }
     }
   }
@@ -359,7 +361,7 @@ public final class CoreAudioPlayer {
   @MainActor
   private func handleCurrentItemChanged(_ item: AVPlayerItem?) {
     guard let item = item else {
-      print("🚧 Current item is nil")
+      log.info("🚧 Current item is nil")
       currentSong = nil
       return
     }
@@ -368,12 +370,12 @@ public final class CoreAudioPlayer {
       let itemIndex = playerItems.firstIndex(of: item),
       itemIndex < playlist.songs.count
     else {
-      print("Could not find item in playerItems or index out of bounds")
+      log.info("Could not find item in playerItems or index out of bounds")
       return
     }
 
     let song = playlist.songs[itemIndex]
-    print(
+    log.info(
       "🎵 Current item changed to index \(itemIndex): \(song.name ?? "Unknown")"
     )
 
@@ -448,13 +450,13 @@ public final class CoreAudioPlayer {
     guard let player = player else { return }
 
     let itemCount = playerItems.count
-    print("Clearing queue with \(itemCount) items")
+    log.info("Clearing queue with \(itemCount) items")
 
     // Remove all items from the queue
     player.removeAllItems()
     playerItems.removeAll()
 
-    print("Queue cleared successfully")
+    log.info("Queue cleared successfully")
   }
 
   @MainActor
