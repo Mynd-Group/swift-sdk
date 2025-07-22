@@ -2,15 +2,13 @@ import Combine
 import AVFoundation
 
 public final class MyndSDK {
-
     public let catalogue: CatalogueClientProtocol
-    public let player:    AudioClientProtocol            
+    public let player:    AudioClientProtocol
 
     public init(
         authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
         audioConfiguration: AudioClient.Configuration = .init()
     ) async {
-
         let httpClient   = HttpClient()
         let authClient   = AuthClient(
             config: .init(

@@ -3,8 +3,6 @@ import Combine
 import MediaPlayer
 
 private let log = Logger(prefix: "AudioPlayerService")
-
-
 /// A platform-agnostic façade for an audio-playback engine.
 @MainActor
 public protocol AudioClientProtocol: AnyObject {
@@ -48,7 +46,6 @@ public final class AudioClient: AudioClientProtocol {
     return core.currentPlaylist
     
   }
-
     
     // MARK: -- Opt-in flags
   public struct Configuration: Sendable {
@@ -87,7 +84,9 @@ public final class AudioClient: AudioClientProtocol {
     }
     
     public func pause() { core.pause() }
+  
     public func resume() { core.resume() }
+  
     public func stop() async {
         await core.stop()
         deactivateSessionIfNeeded()
@@ -98,46 +97,37 @@ public final class AudioClient: AudioClientProtocol {
     // MARK: -- Helpers -------------------------------------------------------------------------
     private func setupAuxiliaryPipelines() {
   #if os(iOS)
-        // 1) Interruption handling
       if cfg.handleInterruptions {
-        
-        
         func callback(_ note: Notification) {
-            // 1.  Extract the type value (UInt) from userInfo
             guard
                 let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                 let type = AVAudioSession.InterruptionType(rawValue: raw)
             else { return }                    // malformed notification – bail out
 
             switch type {
-            case .began:
+              case .began:
                 core.pause()                   // your player pauses
 
-            case .ended:
-                // Optional: check if the system says it’s safe to resume
-                let shouldResume = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
-                    .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) }
-                    ?? false
+              case .ended:
+                core.resume()
 
-                if shouldResume { core.resume() }
-
-            @unknown default: break
-            }
+              @unknown default: break
+              }
         }
 
         interruptionHandler.enable(callback)
+        
         }
         
-        // 2) Sync state & progress → Now Playing centre
       if cfg.handleAudioSession {
             core.events
                 .sink { [weak self] event in
                     guard let self else { return }
                     switch event {
                     case .stateChanged(let s):
-                        self.pushNowPlaying(for: s)
+                        self.updateNowPlayingInfo(for: s)
                     case .progressUpdated:
-                        self.pushNowPlaying(for: self.core.state)
+                        self.updateNowPlayingInfo(for: self.core.state)
                     default:
                         break
                     }
@@ -149,7 +139,7 @@ public final class AudioClient: AudioClientProtocol {
       #endif
     }
     
-    private func pushNowPlaying(for state: PlaybackState) {
+    private func updateNowPlayingInfo(for state: PlaybackState) {
         guard case .playing(_, _) = state else { return }
         
         let info = InfoUpdate(
@@ -159,10 +149,10 @@ public final class AudioClient: AudioClientProtocol {
             currentTime: core.progress.playlistCurrentTime,
             rate: 1.0
         )
+      
         nowPlayingHandler.update(info)
     }
     
-    @discardableResult
     private func activateSessionIfNeeded() throws -> Bool {
         guard cfg.handleAudioSession else { return false }
         do {
@@ -182,89 +172,5 @@ public final class AudioClient: AudioClientProtocol {
             sessionHandler.deactivate()
           #endif
         }
-    }
-}
-
-
-
-
-
-// MARK: — InterruptionHandler
-struct InterruptionHandler {
-    private var cancellable: AnyCancellable?
-    private(set) var isEnabled = false
-    
-    mutating func enable(_ callback: @escaping (Notification) -> Void) {
-        guard !isEnabled else { return }
-        isEnabled = true
-
-      #if os(iOS)
-        cancellable = NotificationCenter.default.publisher(
-            for: AVAudioSession.interruptionNotification)
-            .receive(on: DispatchQueue.main)
-            .sink(receiveValue: callback)
-        #endif
-
-    }
-    
-    mutating func disable() {
-        isEnabled = false
-        cancellable?.cancel()
-        cancellable = nil
-    }
-}
-
-// MARK: — AudioSessionHandler
-struct AudioSessionHandler {
-  
-#if os(iOS)
-    
-    func activate(
-        options: [AVAudioSession.CategoryOptions] = [],
-        mode: AVAudioSession.Mode = .default,
-        category: AVAudioSession.Category = .playback
-    ) throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(category, mode: mode, options: AVAudioSession.CategoryOptions(options))
-        try session.setActive(true)
-        log.debug("Audio session activated")
-    }
-  
-  
-    
-    func deactivate() {
-        try? AVAudioSession.sharedInstance().setActive(false)
-        log.debug("Audio session deactivated")
-    }
-  
-#endif
-}
-
-
-// MARK: — NowPlayingInfoCenterHandler
-
-struct InfoUpdate {
-  public var titleName: String
-  public var artistName: String
-  public var duration: TimeInterval
-  public var currentTime: TimeInterval
-  public var rate: Float
-}
-
-struct NowPlayingInfoCenterHandler {
-    private(set) var isEnabled = false
-    
-    mutating func enable()  { isEnabled = true  }
-    mutating func disable() { isEnabled = false }
-    
-    mutating func update(_ update: InfoUpdate) {
-        guard isEnabled else { return }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
-            MPMediaItemPropertyTitle:                update.titleName,
-            MPMediaItemPropertyArtist:               update.artistName,
-            MPMediaItemPropertyPlaybackDuration:     update.duration,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: update.currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate:    update.rate
-        ]
     }
 }
