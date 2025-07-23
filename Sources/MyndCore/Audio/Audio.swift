@@ -2,25 +2,81 @@ import AVFoundation
 import Combine
 import Observation
 
+func songToAvPlayerItem(_ song: Song) async -> AVPlayerItem? {
+    guard let url = URL(string: song.audio.mp3.url) else { return nil }
+    
+    // Create asset on background thread
+    let asset = AVURLAsset(url: url)
+    
+    // Must create AVPlayerItem on MainActor
+    return await MainActor.run {
+        AVPlayerItem(asset: asset)
+    }
+}
+
+/// Converts every `Song` in the playlist to an `AVPlayerItem`,
+/// launching at most 30 concurrent conversions.
+func playlistToAvPlayerItems(_ playlist: PlaylistWithSongs) async -> [AVPlayerItem] {
+  log.info(">>> Converting playlist to AVPlayerItems")
+    let songs      = playlist.songs
+    let batchSize  = 30
+    var allResults = Array<(Int, AVPlayerItem?)>()          // (original index, item)
+    allResults.reserveCapacity(songs.count)
+
+    // Move through the array in strides of `batchSize`
+    for batchStart in stride(from: 0, to: songs.count, by: batchSize) {
+        let batchEnd = min(batchStart + batchSize, songs.count)
+        let slice    = songs[batchStart..<batchEnd]
+
+        // Convert this 30‑song slice in parallel
+        let batchResults: [(Int, AVPlayerItem?)] = await withTaskGroup(
+            of: (Int, AVPlayerItem?).self
+        ) { group in
+          log.info(">>> Processing batch \(batchStart)/\(batchEnd)")
+            for (offset, song) in slice.enumerated() {
+                let globalIndex = batchStart + offset      // keep original position
+                group.addTask {
+                    let item = await songToAvPlayerItem(song)
+                    return (globalIndex, item)
+                }
+            }
+
+            // Collect results for this batch
+            var results = [(Int, AVPlayerItem?)]()
+            for await result in group { results.append(result) }
+            log.info(">>> Batch \(batchStart)/\(batchEnd) done")
+            return results
+        }
+
+        allResults.append(contentsOf: batchResults)
+    }
+
+    // Restore the original playlist order and strip the optionals
+    allResults.sort { $0.0 < $1.0 }
+  log.info(">>> Done converting playlist to AVPlayerItems")
+    return allResults.compactMap { $0.1 }
+}
+
+
 extension Song {
   @MainActor
   func toAVPlayerItem() -> AVPlayerItem? {
     guard let url = URL(string: self.audio.mp3.url) else { return nil }
-    let asset = AVAsset(url: url)
+    let asset = AVURLAsset(url: url)
+    
     return AVPlayerItem(asset: asset)
+  }
+
+  func toAVAsset() -> AVAsset? {
+    guard let url = URL(string: self.audio.mp3.url) else { return nil }
+    let asset = AVAsset(url: url)
+    return asset
   }
 }
 
 extension PlaylistWithSongs {
-  @MainActor
   func toAvPlayerItems() async -> [AVPlayerItem] {
-    var items: [AVPlayerItem] = []
-    for song in self.songs {
-      if let item = await song.toAVPlayerItem() {
-        items.append(item)
-      }
-    }
-    return items
+   return await playlistToAvPlayerItems(self)
   }
 
   func calculateProgress(
@@ -100,6 +156,8 @@ public enum AudioPlayerEvent {
   case progressUpdated(PlaybackProgress)
   case songCompleted(Song, index: Int)
   case playlistCompleted
+  case songNetworkStalled
+  case songNetworkFailure(Error)
   case errorOccurred(Error)
   case volumeChanged(Float)
 }
@@ -119,7 +177,6 @@ public enum AudioError: LocalizedError {
     }
   }
 }
-
 
 private let log = Logger(prefix: "CoreAudioPlayer")
 public final class CoreAudioPlayer {
@@ -195,7 +252,9 @@ public final class CoreAudioPlayer {
     // Update observable state
     currentPlaylist = playlistWithSongs
     let p = playlistWithSongs
+    log.info("Setting up player...")
     await setupPlayer(with: p)
+    log.info(">>> Playlist setup completed <<<")
 
     eventSubject.send(.playlistQueued(playlistWithSongs))
   }
@@ -217,7 +276,7 @@ public final class CoreAudioPlayer {
   }
 
   @MainActor
-  public func stop() async {
+  public func stop() {
     player?.pause()
     clearQueue()
 
@@ -243,60 +302,112 @@ public final class CoreAudioPlayer {
 
   @MainActor
   private func setupPlayer(with playlistWithSongs: PlaylistWithSongs) async {
-    let items = await playlistWithSongs.toAvPlayerItems()
+      log.info(">>> Setting up player... <<<")
+      guard !playlistWithSongs.songs.isEmpty else {
+          state = .idle
+          eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
+          return
+      }
+      
+      log.info("Converting songs to AVPlayerItems...")
+      let items = await playlistWithSongs.toAvPlayerItems()
+      log.info(">>> \(items.count) items converted <<<")
+      
+      if player == nil {
+          player = AVQueuePlayer()
+          player?.automaticallyWaitsToMinimizeStalling = true
+          player?.volume = volume
+          setupObservers()
+      } else {
+          
+          clearQueue()
+      }
 
-    guard !items.isEmpty else {
-      state = .idle
-      eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
-      return
-    }
+      playerItems = items
+      currentSongIndex = 0
 
-    if player == nil {
-      player = AVQueuePlayer()
-      player?.automaticallyWaitsToMinimizeStalling = true
-      player?.volume = volume
-      setupObservers()
-    } else {
-      // Clear existing queue
-      clearQueue()
-    }
+      if let firstSong = playlistWithSongs.songs.first {
+          currentSong = firstSong
+          state = .playing(firstSong, index: 0)
+          eventSubject.send(.stateChanged(state))
+      }
 
-    // Store references first
-    playerItems = items
-
-    // Reset tracking
-    currentSongIndex = 0
-
-    // Set initial playing state
-    if let firstSong = playlistWithSongs.songs.first {
-      currentSong = firstSong
-      state = .playing(firstSong, index: 0)
-      eventSubject.send(.stateChanged(state))
-    }
-
-    // add items to queue
-    items.forEach { player?.insert($0, after: nil) }
-
-    player?.play()
-    // Update progress
-    updateProgressFromPlayer()
-
+      // Add items to queue
+      if let player = player, !items.isEmpty {
+  
+          
+        log.info("Queuing first item")
+        // Queue first few items on main thread
+        player.replaceCurrentItem(with: items[0])
+        log.info(">>> Queued initial item <<<")
+    
+        
+          
+          // Queue remaining items in background and wait for completion
+          
+              let remainingItems = Array(items.dropFirst())
+              updateProgressFromPlayer()
+              let capturedPreviousItem = items[0]
+              let itemCount = remainingItems.count
+              
+            await Task.detached(priority: .userInitiated) {
+                  log.info("inserting remaining \(itemCount) items...")
+                  var previous = capturedPreviousItem
+                  
+                  for (index, item) in remainingItems.enumerated() {
+                      player.insert(item, after: previous)
+                      previous = item
+                  }
+                  
+                log.info("Finished queueing remaining \(itemCount) items")
+              }.value
+          
+          
+          log.info("All player items queued")
+      }
+      
+      player?.play()
+      updateProgressFromPlayer()
+      log.info(">>> Player setup complete <<<")
   }
-
+  
   @MainActor
   private func setupObservers() {
+    log.info("Setting up observers")
     guard let player = player else { return }
 
     // Track item completion
     NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
+      .receive(on: DispatchQueue.main)
       .compactMap { $0.object as? AVPlayerItem }
       .sink { [weak self] item in
         self?.handleItemDidPlayToEnd(item)
       }
       .store(in: &cancellables)
 
+    // Track item network stall
+    NotificationCenter.default.publisher(for: .AVPlayerItemPlaybackStalled)
+      .receive(on: DispatchQueue.main)
+      .compactMap { $0.object as? AVPlayerItem }
+      .sink { [weak self] item in
+        self?.handlePlaybackStalled(item)
+      }
+      .store(in: &cancellables)
+
+    // Track item network unrecoverable failure
+    NotificationCenter.default.publisher(
+      for: .AVPlayerItemFailedToPlayToEndTime
+    )
+    .receive(on: DispatchQueue.main)
+    .compactMap { $0.object as? AVPlayerItem }
+    .sink { [weak self] item in
+      self?.handlePlaybackFailed(item)
+    }
+    .store(in: &cancellables)
+
     // Track current item changes
     player.publisher(for: \.currentItem)
+      .receive(on: DispatchQueue.main)
       .removeDuplicates()
       .sink { [weak self] item in
         self?.handleCurrentItemChanged(item)
@@ -305,6 +416,7 @@ public final class CoreAudioPlayer {
 
     // Track playback state changes
     player.publisher(for: \.timeControlStatus)
+      .receive(on: DispatchQueue.main)
       .removeDuplicates()
       .sink { [weak self] status in
         self?.handleTimeControlStatusChanged(status)
@@ -323,8 +435,23 @@ public final class CoreAudioPlayer {
     }
   }
 
+  private func handlePlaybackStalled(_ item: AVPlayerItem) {
+    log.info("Playback stalled - buffering...")
+    eventSubject.send(.songNetworkStalled)
+  }
+
+  @MainActor
+  private func handlePlaybackFailed(_ item: AVPlayerItem) {
+    if let error = item.error {
+      log.error("Playback failed: \(error)")
+      eventSubject.send(.songNetworkFailure(error))
+      pause()
+    }
+  }
+
   @MainActor
   private func handleItemDidPlayToEnd(_ item: AVPlayerItem) {
+    log.info("Item played to end")
     guard let playlist = currentPlaylist,
       let itemIndex = playerItems.firstIndex(of: item),
       itemIndex < playlist.songs.count
@@ -338,9 +465,9 @@ public final class CoreAudioPlayer {
     switch repeatMode {
     case .none:
       if isLastSong {
-        state = .stopped
         eventSubject.send(.playlistCompleted)
         log.info("Playlist completed - stopping")
+        stop()
       } else {
         // AVQueuePlayer automatically advances to next item
         log.info("Song \(itemIndex) completed, advancing to next")
@@ -350,7 +477,9 @@ public final class CoreAudioPlayer {
       if isLastSong {
         eventSubject.send(.playlistCompleted)
         log.info("Playlist completed - restarting for repeat all")
-        Task { await replayAllSongs() }
+        Task {
+          await replayAllSongs()
+        }
       } else {
         // AVQueuePlayer automatically advances to next item
         log.info("Song \(itemIndex) completed, advancing to next")
@@ -360,6 +489,7 @@ public final class CoreAudioPlayer {
 
   @MainActor
   private func handleCurrentItemChanged(_ item: AVPlayerItem?) {
+    log.info("Current Item Changed")
     guard let item = item else {
       log.info("🚧 Current item is nil")
       currentSong = nil
@@ -421,7 +551,11 @@ public final class CoreAudioPlayer {
       let playlist = currentPlaylist,
       let index = playerItems.firstIndex(of: currentItem),
       index < playlist.songs.count
-    else { return }
+    else {
+      log.warn("Cannot update progress from player condition not met")
+
+      return
+    }
 
     let trackCurrentTime = currentItem.currentTime().seconds
     let trackDuration = currentItem.duration
@@ -446,25 +580,23 @@ public final class CoreAudioPlayer {
     }
   }
 
-  private func clearQueue() {
-    guard let player = player else { return }
-
-    let itemCount = playerItems.count
-    log.info("Clearing queue with \(itemCount) items")
-
-    // Remove all items from the queue
-    player.removeAllItems()
-    playerItems.removeAll()
-
-    log.info("Queue cleared successfully")
+  private func clearQueue()  {
+    log.info( "Clearing queue")
+      // Remove all items from the queue
+      player?.removeAllItems()
+      playerItems.removeAll()
+      
+      log.info("Queue cleared successfully")
+    
   }
 
   @MainActor
   private func replayAllSongs() async {
+    log.info("Replaying all songs")
     guard let playlist = currentPlaylist else { return }
 
     // Clear current queue and add all songs again
-    clearQueue()
+    await clearQueue()
     let newItems = await playlist.toAvPlayerItems()
     newItems.forEach { player?.insert($0, after: nil) }
 
@@ -481,6 +613,7 @@ public final class CoreAudioPlayer {
   }
 
   private func destroyPlayer() {
+    log.info("Destroy player")
     cancellables.removeAll()
 
     if let observer = progressObserver {
