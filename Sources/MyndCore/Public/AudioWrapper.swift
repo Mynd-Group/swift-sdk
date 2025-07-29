@@ -91,6 +91,9 @@ public final class AudioClient: AudioClientProtocol {
   public func play(_ playlist: PlaylistWithSongs) async {
     _ = try? activateSessionIfNeeded()
     await core.play(playlist)
+    let imageUrl = playlist.playlist.image?.url
+    let image = imageUrl.flatMap { URL(string: $0) }
+    nowPlayingHandler.updateImage(image)
   }
 
   public func pause() { core.pause() }
@@ -175,13 +178,15 @@ public final class AudioClient: AudioClientProtocol {
 
   private func updateNowPlayingInfo(for state: PlaybackState) {
     guard case .playing(_, _) = state else { return }
+    guard let playlist = core.currentPlaylist else { return }
+
 
     let info = InfoUpdate(
       titleName: core.currentPlaylist?.playlist.name ?? "Unknown",
-      artistName: "Track \(core.currentSongIndex + 1) of \(core.currentPlaylist?.songs.count)",
+      artistName: "Track \(core.currentSongIndex + 1) of \(core.currentPlaylist?.songs.count ?? 0)",
       duration: core.progress.trackDuration,
       currentTime: core.progress.trackCurrentTime,
-      rate: 1.0
+      rate: 1.0,
     )
 
     nowPlayingHandler.update(info)

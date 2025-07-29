@@ -19,14 +19,29 @@ struct NowPlayingInfoCenterHandler {
     mutating func enable()  { isEnabled = true  }
     mutating func disable() { isEnabled = false }
 
+  mutating func updateImage(_ url: URL?) {
+      let info = MPNowPlayingInfoCenter.default()
+      guard isEnabled else { return }
+
+      guard let url = url else {
+          var currentInfo = info.nowPlayingInfo ?? [:]
+          currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
+          info.nowPlayingInfo = currentInfo
+          return
+      }
+
+     // TODO:
+  }
+
     mutating func update(_ update: InfoUpdate) {
+        let info = MPNowPlayingInfoCenter.default()
         guard isEnabled else { return }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
-            MPMediaItemPropertyTitle:                update.titleName,
-            MPMediaItemPropertyArtist:               update.artistName,
-            MPMediaItemPropertyPlaybackDuration:     update.duration,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: update.currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate:    update.rate
-        ]
+        var currentInfo = info.nowPlayingInfo ?? [:]
+        currentInfo[MPMediaItemPropertyTitle] = update.titleName
+        currentInfo[MPMediaItemPropertyArtist] = update.artistName
+        currentInfo[MPMediaItemPropertyPlaybackDuration] = update.duration
+        currentInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = update.currentTime
+        currentInfo[MPNowPlayingInfoPropertyPlaybackRate] = update.rate
+        info.nowPlayingInfo = currentInfo
     }
 }
