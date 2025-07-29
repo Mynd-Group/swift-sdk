@@ -2,76 +2,30 @@ import AVFoundation
 import Combine
 import Observation
 
-func songToAvPlayerItem(_ song: Song) async -> AVPlayerItem? {
-    guard let url = URL(string: song.audio.mp3.url) else { return nil }
-    
-    // Create asset on background thread
-    let asset = AVURLAsset(url: url)
-    
-    // Must create AVPlayerItem on MainActor
-    return await MainActor.run {
-        AVPlayerItem(asset: asset)
-    }
+func songsToPlayerItems(_ songs: [Song]) async -> [AVPlayerItem] {
+    return await Task.detached(priority: .userInitiated) {
+      log.info("songsToPlayerItems >>> Creating AVPlayerItems")
+        let urls: [String] = songs.compactMap { $0.audio.mp3.url }
+        let assets: [AVURLAsset] = urls.compactMap {
+            guard let url = URL(string: $0) else { return nil }
+            return AVURLAsset(url: url)
+        }
+        
+        var items: [AVPlayerItem] = []
+        for asset in assets {
+            let item = AVPlayerItem(asset: asset)
+            items.append(item)
+        }
+      log.info("songsToPlayerItems <<< Creating AVPlayerItems")
+        return items
+    }.value
 }
+
 
 /// Converts every `Song` in the playlist to an `AVPlayerItem`,
 /// launching at most 30 concurrent conversions.
 func playlistToAvPlayerItems(_ playlist: PlaylistWithSongs) async -> [AVPlayerItem] {
-  log.info(">>> Converting playlist to AVPlayerItems")
-    let songs      = playlist.songs
-    let batchSize  = 30
-    var allResults = Array<(Int, AVPlayerItem?)>()          // (original index, item)
-    allResults.reserveCapacity(songs.count)
-
-    // Move through the array in strides of `batchSize`
-    for batchStart in stride(from: 0, to: songs.count, by: batchSize) {
-        let batchEnd = min(batchStart + batchSize, songs.count)
-        let slice    = songs[batchStart..<batchEnd]
-
-        // Convert this 30‑song slice in parallel
-        let batchResults: [(Int, AVPlayerItem?)] = await withTaskGroup(
-            of: (Int, AVPlayerItem?).self
-        ) { group in
-          log.info(">>> Processing batch \(batchStart)/\(batchEnd)")
-            for (offset, song) in slice.enumerated() {
-                let globalIndex = batchStart + offset      // keep original position
-                group.addTask {
-                    let item = await songToAvPlayerItem(song)
-                    return (globalIndex, item)
-                }
-            }
-
-            // Collect results for this batch
-            var results = [(Int, AVPlayerItem?)]()
-            for await result in group { results.append(result) }
-            log.info(">>> Batch \(batchStart)/\(batchEnd) done")
-            return results
-        }
-
-        allResults.append(contentsOf: batchResults)
-    }
-
-    // Restore the original playlist order and strip the optionals
-    allResults.sort { $0.0 < $1.0 }
-  log.info(">>> Done converting playlist to AVPlayerItems")
-    return allResults.compactMap { $0.1 }
-}
-
-
-extension Song {
-  @MainActor
-  func toAVPlayerItem() -> AVPlayerItem? {
-    guard let url = URL(string: self.audio.mp3.url) else { return nil }
-    let asset = AVURLAsset(url: url)
-    
-    return AVPlayerItem(asset: asset)
-  }
-
-  func toAVAsset() -> AVAsset? {
-    guard let url = URL(string: self.audio.mp3.url) else { return nil }
-    let asset = AVAsset(url: url)
-    return asset
-  }
+ return await songsToPlayerItems(playlist.songs)
 }
 
 extension PlaylistWithSongs {
