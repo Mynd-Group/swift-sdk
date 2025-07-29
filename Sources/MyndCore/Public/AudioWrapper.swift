@@ -178,9 +178,9 @@ public final class AudioClient: AudioClientProtocol {
 
     let info = InfoUpdate(
       titleName: core.currentPlaylist?.playlist.name ?? "Unknown",
-      artistName: "MyndGroup",
-      duration: core.progress.playlistDuration,
-      currentTime: core.progress.playlistCurrentTime,
+      artistName: "Track \(core.currentSongIndex + 1) of \(core.currentPlaylist?.songs.count)",
+      duration: core.progress.trackDuration,
+      currentTime: core.progress.trackCurrentTime,
       rate: 1.0
     )
 
