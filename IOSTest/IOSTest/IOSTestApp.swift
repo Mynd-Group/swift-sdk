@@ -103,7 +103,7 @@ class AudioPlayerViewModel: ObservableObject {
         do {
             let playlistWithSongs = try await sdk.catalogue.getPlaylist(playlistId: playlist.id)
             print("Loaded playlist with \(playlistWithSongs.songs.count) songs: \(playlist.name)")
-            await sdk.player.play(playlistWithSongs)
+          await sdk.player.play(playlistWithSongs)
         } catch {
             errorMessage = "Failed to load playlist details: \(error.localizedDescription)"
             print("Error loading playlist details for \(playlist.name): \(error)")
