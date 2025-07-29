@@ -3,34 +3,35 @@ import Combine
 import Observation
 
 func songsToPlayerItems(_ songs: [Song]) async -> [AVPlayerItem] {
-    return await Task.detached(priority: .userInitiated) {
-      log.info("songsToPlayerItems >>> Creating AVPlayerItems")
-        let urls: [String] = songs.compactMap { $0.audio.mp3.url }
-        let assets: [AVURLAsset] = urls.compactMap {
-            guard let url = URL(string: $0) else { return nil }
-            return AVURLAsset(url: url)
-        }
-        
-        var items: [AVPlayerItem] = []
-        for asset in assets {
-            let item = AVPlayerItem(asset: asset)
-            items.append(item)
-        }
-      log.info("songsToPlayerItems <<< Creating AVPlayerItems")
-        return items
-    }.value
-}
+  return await Task.detached(priority: .userInitiated) {
+    log.info("songsToPlayerItems >>> Creating AVPlayerItems")
+    let urls: [String] = songs.compactMap { $0.audio.mp3.url }
+    let assets: [AVURLAsset] = urls.compactMap {
+      guard let url = URL(string: $0) else { return nil }
+      return AVURLAsset(url: url)
+    }
 
+    var items: [AVPlayerItem] = []
+    for asset in assets {
+      let item = AVPlayerItem(asset: asset)
+      items.append(item)
+    }
+    log.info("songsToPlayerItems <<< Creating AVPlayerItems")
+    return items
+  }.value
+}
 
 /// Converts every `Song` in the playlist to an `AVPlayerItem`,
 /// launching at most 30 concurrent conversions.
-func playlistToAvPlayerItems(_ playlist: PlaylistWithSongs) async -> [AVPlayerItem] {
- return await songsToPlayerItems(playlist.songs)
+func playlistToAvPlayerItems(_ playlist: PlaylistWithSongs) async
+  -> [AVPlayerItem]
+{
+  return await songsToPlayerItems(playlist.songs)
 }
 
 extension PlaylistWithSongs {
   func toAvPlayerItems() async -> [AVPlayerItem] {
-   return await playlistToAvPlayerItems(self)
+    return await playlistToAvPlayerItems(self)
   }
 
   func calculateProgress(
@@ -256,75 +257,71 @@ public final class CoreAudioPlayer {
 
   @MainActor
   private func setupPlayer(with playlistWithSongs: PlaylistWithSongs) async {
-      log.info(">>> Setting up player... <<<")
-      guard !playlistWithSongs.songs.isEmpty else {
-          state = .idle
-          eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
-          return
-      }
-      
-      log.info("Converting songs to AVPlayerItems...")
-      let items = await playlistWithSongs.toAvPlayerItems()
-      log.info(">>> \(items.count) items converted <<<")
-      
-      if player == nil {
-          player = AVQueuePlayer()
-          player?.automaticallyWaitsToMinimizeStalling = true
-          player?.volume = volume
-          setupObservers()
-      } else {
-          
-          clearQueue()
-      }
+    log.info(">>> Setting up player... <<<")
+    guard !playlistWithSongs.songs.isEmpty else {
+      state = .idle
+      eventSubject.send(.errorOccurred(AudioError.emptyPlaylist))
+      return
+    }
 
-      playerItems = items
-      currentSongIndex = 0
+    log.info("Converting songs to AVPlayerItems...")
+    let items = await playlistWithSongs.toAvPlayerItems()
+    log.info(">>> \(items.count) items converted <<<")
 
-      if let firstSong = playlistWithSongs.songs.first {
-          currentSong = firstSong
-          state = .playing(firstSong, index: 0)
-          eventSubject.send(.stateChanged(state))
-      }
+    if player == nil {
+      player = AVQueuePlayer()
+      player?.automaticallyWaitsToMinimizeStalling = true
+      player?.volume = volume
+      setupObservers()
+    } else {
 
-      // Add items to queue
-      if let player = player, !items.isEmpty {
-  
-          
-        log.info("Queuing first item")
-        // Queue first few items on main thread
-        player.replaceCurrentItem(with: items[0])
-        log.info(">>> Queued initial item <<<")
-    
-        
-          
-          // Queue remaining items in background and wait for completion
-          
-              let remainingItems = Array(items.dropFirst())
-              updateProgressFromPlayer()
-              let capturedPreviousItem = items[0]
-              let itemCount = remainingItems.count
-              
-            await Task.detached(priority: .userInitiated) {
-                  log.info("inserting remaining \(itemCount) items...")
-                  var previous = capturedPreviousItem
-                  
-                  for (index, item) in remainingItems.enumerated() {
-                      player.insert(item, after: previous)
-                      previous = item
-                  }
-                  
-                log.info("Finished queueing remaining \(itemCount) items")
-              }.value
-          
-          
-          log.info("All player items queued")
-      }
-      
-      player?.play()
+      clearQueue()
+    }
+
+    playerItems = items
+    currentSongIndex = 0
+
+    if let firstSong = playlistWithSongs.songs.first {
+      currentSong = firstSong
+      state = .playing(firstSong, index: 0)
+      eventSubject.send(.stateChanged(state))
+    }
+
+    // Add items to queue
+    if let player = player, !items.isEmpty {
+
+      log.info("Queuing first item")
+      // Queue first few items on main thread
+      player.replaceCurrentItem(with: items[0])
+      log.info(">>> Queued initial item <<<")
+
+      // Queue remaining items in background and wait for completion
+
+      let remainingItems = Array(items.dropFirst())
       updateProgressFromPlayer()
-      log.info(">>> Player setup complete <<<")
+      let capturedPreviousItem = items[0]
+      let itemCount = remainingItems.count
+
+      await Task.detached(priority: .userInitiated) {
+        log.info("inserting remaining \(itemCount) items...")
+        var previous = capturedPreviousItem
+
+        for (index, item) in remainingItems.enumerated() {
+          player.insert(item, after: previous)
+          previous = item
+        }
+
+        log.info("Finished queueing remaining \(itemCount) items")
+      }.value
+
+      log.info("All player items queued")
+    }
+
+    player?.play()
+    updateProgressFromPlayer()
+    log.info(">>> Player setup complete <<<")
   }
-  
+
   @MainActor
   private func setupObservers() {
     log.info("Setting up observers")
@@ -534,14 +531,14 @@ public final class CoreAudioPlayer {
     }
   }
 
-  private func clearQueue()  {
-    log.info( "Clearing queue")
-      // Remove all items from the queue
-      player?.removeAllItems()
-      playerItems.removeAll()
-      
-      log.info("Queue cleared successfully")
-    
+  private func clearQueue() {
+    log.info("Clearing queue")
+    // Remove all items from the queue
+    player?.removeAllItems()
+    playerItems.removeAll()
+
+    log.info("Queue cleared successfully")
+
   }
 
   @MainActor
