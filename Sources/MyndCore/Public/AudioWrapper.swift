@@ -9,6 +9,7 @@ public protocol AudioClientProtocol: AnyObject {
 
   // MARK: Read-only state / observability
   var events: AnyPublisher<AudioPlayerEvent, Never> { get }
+  var royaltyEvents: AnyPublisher<RoyaltyTrackingEvent, Never> { get }
   var state: PlaybackState { get }
   var progress: PlaybackProgress { get }
 
@@ -62,6 +63,7 @@ public final class AudioClient: AudioClientProtocol {
 
   // MARK: -- Public surface
   public var events: AnyPublisher<AudioPlayerEvent, Never> { core.events }
+  public var royaltyEvents: AnyPublisher<RoyaltyTrackingEvent, Never> { core.royaltyEvents }
   public var state: PlaybackState { core.state }
   public var progress: PlaybackProgress { core.progress }
   public var volume: Float {

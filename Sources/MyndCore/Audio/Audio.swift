@@ -157,11 +157,16 @@ public enum RepeatMode: CaseIterable {
 
 // MARK: - Events
 
+public enum RoyaltyTrackingEvent {
+  case trackStarted(Song)
+  case trackProgress(Song, progress: Double)
+  case trackFinished(Song)
+}
+
 public enum AudioPlayerEvent {
   case playlistQueued(PlaylistWithSongs)
   case stateChanged(PlaybackState)
   case progressUpdated(PlaybackProgress)
-  case songCompleted(Song, index: Int)
   case playlistCompleted
   case songNetworkStalled
   case songNetworkFailure(Error)
@@ -232,6 +237,11 @@ public final class CoreAudioPlayer {
   private let eventSubject = PassthroughSubject<AudioPlayerEvent, Never>()
   public var events: AnyPublisher<AudioPlayerEvent, Never> {
     eventSubject.eraseToAnyPublisher()
+  }
+
+  private let royaltyEventSubject = PassthroughSubject<RoyaltyTrackingEvent, Never>()
+  public var royaltyEvents: AnyPublisher<RoyaltyTrackingEvent, Never> {
+    royaltyEventSubject.eraseToAnyPublisher()
   }
 
   // MARK: - Private Properties
@@ -505,7 +515,7 @@ public final class CoreAudioPlayer {
     }
 
     let song = playlist.songs[itemIndex]
-    eventSubject.send(.songCompleted(song, index: itemIndex))
+    royaltyEventSubject.send(.trackFinished(song))
 
     let isLastSong = itemIndex == playlist.songs.count - 1
 
@@ -544,6 +554,8 @@ public final class CoreAudioPlayer {
 
     currentSong = song
     currentSongIndex = itemIndex
+
+    royaltyEventSubject.send(.trackStarted(song))
 
     switch player?.timeControlStatus {
     case .playing:
@@ -612,9 +624,14 @@ public final class CoreAudioPlayer {
       playlistDuration: playlistDuration
     )
 
-    if newProgress != progress {
+        if newProgress != progress {
       progress = newProgress
       eventSubject.send(.progressUpdated(newProgress))
+
+      if let song = currentSong {
+        let progressValue = trackDuration.seconds > 0 ? trackCurrentTime / trackDuration.seconds : 0.0
+        royaltyEventSubject.send(.trackProgress(song, progress: progressValue))
+      }
     }
   }
 
