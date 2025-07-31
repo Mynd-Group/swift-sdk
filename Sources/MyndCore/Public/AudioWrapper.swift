@@ -101,7 +101,7 @@ public final class AudioClient: AudioClientProtocol {
   public func resume() { core.resume() }
 
   public func stop() async {
-    await core.stop()
+    core.stop()
     deactivateSessionIfNeeded()
   }
 
@@ -178,7 +178,7 @@ public final class AudioClient: AudioClientProtocol {
 
   private func updateNowPlayingInfo(for state: PlaybackState) {
     guard case .playing(_, _) = state else { return }
-    guard let playlist = core.currentPlaylist else { return }
+    guard core.currentPlaylist != nil else { return }
 
 
     let info = InfoUpdate(

@@ -7,13 +7,13 @@ public final class MyndSDK {
     
     @MainActor
     public init(
-        authFunction: @Sendable @escaping () async throws -> AuthPayloadProtocol,
+        refreshToken: String,
         audioConfiguration: AudioClient.Configuration = .init()
     ) {
         let httpClient   = HttpClient()
         let authClient   = AuthClient(
             config: .init(
-                authFunction: authFunction,
+                refreshToken: refreshToken,
                 httpClient:   httpClient
             ))
 

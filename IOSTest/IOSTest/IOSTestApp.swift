@@ -4,7 +4,7 @@ import MyndCore
 
 @MainActor
 class AudioPlayerViewModel: ObservableObject {
-    private let sdk: MyndSDK
+    private var sdk: MyndSDK?
     private var cancellables = Set<AnyCancellable>()
 
     // Categories and Playlists
@@ -31,11 +31,19 @@ class AudioPlayerViewModel: ObservableObject {
     @Published var volume: Float = 1.0
 
     init() {
-        self.sdk = MyndSDK(authFunction: authFn)
-        setupPlayerObservers()
+        Task {
+            do {
+                let authPayload = try await authFn()
+                self.sdk = MyndSDK(refreshToken: authPayload.refreshToken)
+                self.setupPlayerObservers()
+            } catch {
+                print("Failed to get initial auth payload: \(error)")
+            }
+        }
     }
 
     private func setupPlayerObservers() {
+        guard let sdk = sdk else { return }
         sdk.player.events
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -66,6 +74,7 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
     func loadCategories() async {
+        guard let sdk = sdk else { return }
         isLoadingCategories = true
         errorMessage = nil
 
@@ -79,6 +88,7 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
     func selectCategory(_ category: MyndCore.Category) async {
+        guard let sdk = sdk else { return }
         selectedCategory = category
         isLoadingPlaylists = true
         errorMessage = nil
@@ -96,6 +106,7 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
         func play(_ playlist: Playlist) async {
+        guard let sdk = sdk else { return }
         isLoadingPlaylistDetails = true
         errorMessage = nil
         print("Loading playlist details for: \(playlist.name)")
@@ -113,6 +124,7 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
     func togglePlayPause() {
+        guard let sdk = sdk else { return }
         if sdk.player.isPlaying {
             sdk.player.pause()
         } else {
@@ -121,10 +133,12 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
     func stop() async {
+        guard let sdk = sdk else { return }
         await sdk.player.stop()
     }
 
     func toggleRepeatMode() {
+        guard let sdk = sdk else { return }
         let newMode: RepeatMode = repeatMode == .none ? .all : .none
         repeatMode = newMode
         sdk.player.setRepeatMode(newMode)
@@ -132,6 +146,7 @@ class AudioPlayerViewModel: ObservableObject {
     }
 
     func setVolume(_ value: Float) {
+        guard let sdk = sdk else { return }
         let clamped = min(max(value, 0.0), 1.0)
         sdk.player.setVolume(clamped)
         volume = clamped

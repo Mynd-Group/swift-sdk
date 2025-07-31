@@ -395,7 +395,7 @@ public final class CoreAudioPlayer {
 
         playerItems.append(contentsOf: batchItems)
 
-        for (index, item) in batchItems.enumerated() {
+        for (_, item) in batchItems.enumerated() {
           player.insert(item, after: nil)
         }
       }

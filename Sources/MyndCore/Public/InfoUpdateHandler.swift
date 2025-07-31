@@ -23,7 +23,7 @@ struct NowPlayingInfoCenterHandler {
       let info = MPNowPlayingInfoCenter.default()
       guard isEnabled else { return }
 
-      guard let url = url else {
+    guard url != nil else {
           var currentInfo = info.nowPlayingInfo ?? [:]
           currentInfo.removeValue(forKey: MPMediaItemPropertyArtwork)
           info.nowPlayingInfo = currentInfo

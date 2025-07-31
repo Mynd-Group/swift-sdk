@@ -30,14 +30,14 @@ protocol AuthClientProtocol: Sendable {
 }
 
 struct AuthClientConfig {
-    public let authFunction: () async throws -> AuthPayloadProtocol
+    public let refreshToken: String
     public let httpClient: HttpClientProtocol
 
     public init(
-        authFunction: @escaping () async throws -> AuthPayloadProtocol,
+        refreshToken: String,
         httpClient: HttpClientProtocol
     ) {
-        self.authFunction = authFunction
+        self.refreshToken = refreshToken
         self.httpClient = httpClient
     }
 }
@@ -47,7 +47,7 @@ actor AuthClient: AuthClientProtocol {
     // MARK: – Dependencies
 
     private let httpClient: HttpClientProtocol
-    private let authFunction: () async throws -> AuthPayloadProtocol
+    private let refreshToken: String
 
     // MARK: – Cached state
 
@@ -58,16 +58,16 @@ actor AuthClient: AuthClientProtocol {
 
     public init(config: AuthClientConfig) {
         httpClient = config.httpClient
-        authFunction = config.authFunction
+        refreshToken = config.refreshToken
     }
 
     private func handleNoAuthPayload() async throws -> String {
         defer { authPayloadTask = nil }
-        log.info("No auth payload, launching auth function")
+        log.info("No auth payload, using initial refresh token")
         authPayloadTask = Task { () throws -> AuthPayloadProtocol in
-            log.info("Launching auth function")
-            let payload = try await self.authFunction()
-            log.info("Auth function returned payload: \(payload)")
+            log.info("Using initial refresh token to get auth payload")
+            let payload = try await self.getInitialAuthPayload()
+            log.info("Initial refresh returned payload: \(payload)")
             return payload
         }
         guard let task = authPayloadTask else {
@@ -83,22 +83,12 @@ actor AuthClient: AuthClientProtocol {
         defer { authPayloadTask = nil }
         log.info("Token is expired, refreshing")
         authPayloadTask = Task { () throws -> AuthPayloadProtocol in
-            do {
-                let payload = try await self.refreshAccessToken()
-                guard let payload = payload else {
-                    log.error("Refresh token returned nil payload")
-                    throw AuthError.invalidRefreshToken
-                }
-                return payload
-            } catch {
-                // TODO: we should only do this on some errors
-                do {
-                    let payload = try await self.authFunction()
-                    return payload
-                } catch {
-                    throw error
-                }
+            let payload = try await self.refreshAccessToken()
+            guard let payload = payload else {
+                log.error("Refresh token returned nil payload")
+                throw AuthError.invalidRefreshToken
             }
+            return payload
         }
 
         guard let task = authPayloadTask else {
@@ -157,6 +147,11 @@ actor AuthClient: AuthClientProtocol {
 
     // MARK: – Private helpers
 
+    private func getInitialAuthPayload() async throws -> AuthPayloadProtocol {
+        log.info("Getting initial auth payload with refresh token")
+        return try await performRefreshTokenRequest(refreshToken: self.refreshToken)
+    }
+
     private func refreshAccessToken() async throws -> AuthPayloadProtocol? {
         log.info("Refreshing access token")
         guard let currentPayload = authPayload else {
@@ -165,7 +160,10 @@ actor AuthClient: AuthClientProtocol {
         }
 
         log.info("Current payload: \(currentPayload)")
+        return try await performRefreshTokenRequest(refreshToken: currentPayload.refreshToken)
+    }
 
+    private func performRefreshTokenRequest(refreshToken: String) async throws -> AuthPayloadProtocol {
         guard let url = URL(
             string: Config.baseUrl.appendingPathComponent("/integration-user/refresh-token")
                 .absoluteString) else {
@@ -180,7 +178,7 @@ actor AuthClient: AuthClientProtocol {
 
         do {
             let response: AuthPayload = try await httpClient.post(
-                url, body: RefreshRequest(refreshToken: currentPayload.refreshToken),
+                url, body: RefreshRequest(refreshToken: refreshToken),
                 headers: headers
             )
             log.info("Response: \(response)")
