@@ -9,8 +9,7 @@ Pod::Spec.new do |spec|
   spec.source       = { :git => "https://github.com/Mynd-Group/swift-sdk.git", :tag => "#{spec.version}" }
   
   spec.ios.deployment_target = "14.0"
-  spec.osx.deployment_target = "14.0"
-  
+
   spec.swift_version = "5.0"
   
   spec.source_files = "Sources/MyndCore/**/*.swift"
