@@ -5,7 +5,7 @@ Pod::Spec.new do |spec|
   spec.description  = "Swift SDK for MyndCore audio streaming and playlist management"
   spec.homepage     = "https://github.com/Mynd-Group/swift-sdk"
   spec.license      = { :type => "MIT", :file => "LICENSE" }
-  spec.author       = { "Myndstream" => "support@myndstream.com" }
+  spec.author       = { "Myndstream" => "tech@myndstream.com" }
   spec.source       = { :git => "https://github.com/Mynd-Group/swift-sdk.git", :tag => "#{spec.version}" }
   
   spec.ios.deployment_target = "14.0"
