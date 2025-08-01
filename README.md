@@ -39,6 +39,66 @@ MyndSDK enables iOS applications to access curated music content through a robus
 
 ## Quick Start
 
+### Authentication Setup
+
+Before using the SDK, you need to set up authentication through your backend. The MyndSDK requires a refresh token to initialize, which must be obtained by calling the Myndstream API from your secure backend endpoint.
+
+**Important**: Never store API keys or make direct calls to the Myndstream API from your mobile app for security reasons.
+
+#### Backend Integration Required
+
+1. **Create a secure endpoint** in your backend that:
+   - Accepts your user's identifier
+   - Calls the Myndstream authentication API using your API key
+   - Returns the authentication tokens to your app
+
+2. **Your mobile app** should:
+   - Call your backend endpoint
+   - Receive the refresh token
+   - Use it to initialize the MyndSDK
+
+#### Example Implementation
+
+**Your Backend Endpoint** (conceptual):
+```
+POST /api/auth/myndstream
+
+1. Authenticate the incoming request using your existing auth system
+2. Extract the authenticated user's ID
+3. Make a request to Myndstream API:
+
+   POST https://app.myndstream.com/api/v1/integration-user/authenticate
+   Headers:
+     x-api-key: YOUR_MYNDSTREAM_API_KEY
+     Content-Type: application/json
+   Body:
+     {
+       "providerUserId": "authenticated_user_id"
+     }
+
+4. Return the authentication response to your mobile app
+```
+
+**Your iOS App**:
+```swift
+import MyndCore
+
+// 1. Call your backend endpoint to get Myndstream tokens
+func getMyndstreamRefreshToken() async throws -> String {
+    // Implementation depends on your networking layer and auth system
+    // - Make authenticated request to your backend
+    // - Parse the response to extract refreshToken
+    // - Return the refreshToken string
+}
+
+// 2. Initialize SDK with the refresh token
+@MainActor
+func initializeSDK() async throws -> MyndSDK {
+    let refreshToken = try await getMyndstreamRefreshToken()
+    return MyndSDK(refreshToken: refreshToken)
+}
+```
+
 ### Installation
 
 The SDK is distributed via CocoaPods.
