@@ -1,5 +1,16 @@
 # MyndSDK
 
+> ⚠️ **EARLY BETA SOFTWARE** ⚠️
+> 
+> **This SDK is currently in early beta development. Expect bugs, breaking changes, and incomplete features.**
+> 
+> - 🔄 **Breaking Changes**: API may change significantly between versions
+> - 📝 **Incomplete Documentation**: Some features may be undocumented
+> - 🧪 **Testing Required**: Thoroughly test all functionality in your use case
+> - 💬 **Feedback Welcome**: Please report issues and provide feedback
+> 
+> **Not recommended for production use at this time.**
+
 A comprehensive iOS SDK for music streaming and playback, providing seamless integration with the Myndstream platform.
 
 ## Overview
