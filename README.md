@@ -9,7 +9,6 @@
 > - 🧪 **Testing Required**: Thoroughly test all functionality in your use case
 > - 💬 **Feedback Welcome**: Please report issues and provide feedback
 > 
-> **Not recommended for production use at this time.**
 
 A comprehensive iOS SDK for music streaming and playback, providing seamless integration with the Myndstream platform.
 
