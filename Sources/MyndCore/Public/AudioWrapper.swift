@@ -124,10 +124,27 @@ public final class AudioClient: AudioClientProtocol {
 
           switch type {
           case .began:
-            core.pause()  // your player pauses
+            core.pause()
 
           case .ended:
-            core.resume()
+            let optionsValue = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
+
+            // Check if we should resume (default to true if no options provided)
+            let shouldResume = optionsValue == nil || options.contains(.shouldResume)
+
+            if shouldResume {
+              do {
+                // Reactivate audio session if needed
+                try AVAudioSession.sharedInstance().setActive(true)
+                core.resume()
+                log.debug("Successfully resumed playback after interruption")
+              } catch {
+                log.error("Failed to resume playback after interruption: \(error)")
+              }
+            } else {
+              log.debug("Interruption ended but shouldResume is false - not resuming playback")
+            }
 
           @unknown default: break
           }
@@ -179,7 +196,6 @@ public final class AudioClient: AudioClientProtocol {
   private func updateNowPlayingInfo(for state: PlaybackState) {
     guard case .playing(_, _) = state else { return }
     guard core.currentPlaylist != nil else { return }
-
 
     let info = InfoUpdate(
       titleName: core.currentPlaylist?.playlist.name ?? "Unknown",
