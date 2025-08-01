@@ -41,10 +41,18 @@ MyndSDK enables iOS applications to access curated music content through a robus
 
 ### Installation
 
-The SDK is distributed via CocoaPods. Add the dependency to your `Podfile`:
+The SDK is distributed via CocoaPods.
+
+**For app projects**, add the dependency to your `Podfile`:
 
 ```ruby
 pod 'MyndCore', '~> 1.1.0'
+```
+
+**For library/framework projects**, add the dependency to your `.podspec`:
+
+```ruby
+s.dependency 'MyndCore', '1.1.0'
 ```
 
 Then run:
