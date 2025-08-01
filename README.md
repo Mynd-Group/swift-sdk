@@ -101,6 +101,8 @@ func initializeSDK() async throws -> MyndSDK {
 
 ### Installation
 
+https://cocoapods.org/pods/MyndCore
+
 The SDK is distributed via CocoaPods.
 
 **For app projects**, add the dependency to your `Podfile`:
