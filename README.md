@@ -108,13 +108,13 @@ The SDK is distributed via CocoaPods.
 **For app projects**, add the dependency to your `Podfile`:
 
 ```ruby
-pod 'MyndCore', '~> 1.1.0'
+pod 'MyndCore', '~> 1.3.0'
 ```
 
 **For library/framework projects**, add the dependency to your `.podspec`:
 
 ```ruby
-s.dependency 'MyndCore', '1.1.0'
+s.dependency 'MyndCore', '1.3.0'
 ```
 
 Then run:

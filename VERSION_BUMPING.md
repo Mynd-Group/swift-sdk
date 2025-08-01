@@ -9,14 +9,14 @@ Uses [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`
 
 1. Update version in `MyndCore.podspec`:
    ```ruby
-   spec.version = "1.2.0"
+   spec.version = "1.3.0"
    ```
 
 2. Commit and tag:
    ```
    git add MyndCore.podspec
-   git commit -m "Bump version to 1.2.0"
-   git tag -a 1.2.0 -m "Release version 1.2.0"
-   git push origin 1.2.0 main
+   git commit -m "Bump version to 1.3.0"
+   git tag -a 1.3.0 -m "Release version 1.2.0"
+   git push origin 1.3.0 main
    pod trunk push MyndCore.podspec --allow-warnings
    ``` 
