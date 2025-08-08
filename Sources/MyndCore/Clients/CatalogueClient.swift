@@ -52,21 +52,29 @@ struct CatalogueClientInfraService: CatalogueClientProtocol {
         }
     }
 
-    public func getPlaylists(categoryId _: String?) async throws -> [Playlist] {
-        do {
-            guard let url = URL(string: "\(Config.baseUrl)/integration/catalogue/playlists") else {
-                log.error("Failed to create playlists URL")
-                throw URLError(.badURL)
-            }
-            log.info("Fetching playlists from URL: \(url)")
-            let response: [Playlist] = try await authedHttpClient.get(url, headers: nil)
-            log.info("Received playlists: \(response.count) items")
-            return response
-        } catch {
-            log.error("Failed to fetch playlists: \(error)")
-            throw error
-        }
-    }
+  public func getPlaylists(categoryId: String?) async throws -> [Playlist] {
+      do {
+          let urlString: String
+          if let categoryId = categoryId {
+              urlString = "\(Config.baseUrl)/integration/catalogue/playlists?categoryId=\(categoryId)"
+          } else {
+              urlString = "\(Config.baseUrl)/integration/catalogue/playlists"
+          }
+          
+          guard let url = URL(string: urlString) else {
+              log.error("Failed to create playlists URL")
+              throw URLError(.badURL)
+          }
+          
+          log.info("Fetching playlists from URL: \(url)")
+          let response: [Playlist] = try await authedHttpClient.get(url, headers: nil)
+          log.info("Received playlists: \(response.count) items")
+          return response
+      } catch {
+          log.error("Failed to fetch playlists: \(error)")
+          throw error
+      }
+  }
 
     public func getPlaylist(playlistId: String) async throws -> PlaylistWithSongs {
         do {

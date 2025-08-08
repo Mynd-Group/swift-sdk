@@ -32,6 +32,10 @@ MyndSDK enables iOS applications to access curated music content through a robus
 - Real-time progress tracking
 - Royalty tracking events
 
+### 📈 Session Feedback
+- Submit current mood values (0.0–1.0)
+- Submit listening session ratings (0.0–1.0)
+
 ### 🔐 Authentication
 - Token-based authentication with automatic refresh
 - Thread-safe token management
@@ -108,13 +112,13 @@ The SDK is distributed via CocoaPods.
 **For app projects**, add the dependency to your `Podfile`:
 
 ```ruby
-pod 'MyndCore', '~> 1.3.0'
+pod 'MyndCore', '~> 1.4.0'
 ```
 
 **For library/framework projects**, add the dependency to your `.podspec`:
 
 ```ruby
-s.dependency 'MyndCore', '1.3.0'
+s.dependency 'MyndCore', '1.4.0'
 ```
 
 Then run:
@@ -161,6 +165,15 @@ sdk.player.events
     .store(in: &cancellables)
 ```
 
+### Session Feedback
+
+```swift
+try await sdk.setCurrentMood(0.7)
+try await sdk.rateListeningSession(0.9)
+```
+
+Both methods throw if the provided value is outside 0.0–1.0.
+
 ## API Reference
 
 ### MyndSDK
@@ -177,6 +190,9 @@ public final class MyndSDK {
         refreshToken: String,
         audioConfiguration: AudioClient.Configuration = .init()
     )
+
+    public func setCurrentMood(_ mood: Float) async throws
+    public func rateListeningSession(_ rating: Float) async throws
 }
 ```
 
@@ -312,7 +328,7 @@ All catalogue operations use Swift's error handling with `async throws`. Playbac
 do {
     let categories = try await sdk.catalogue.getCategories()
 } catch {
-    console.log("Failed to fetch categories: \(error)")
+    print("Failed to fetch categories: \(error)")
 }
 ```
 

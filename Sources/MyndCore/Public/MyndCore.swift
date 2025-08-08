@@ -30,4 +30,26 @@ public final class MyndSDK {
         self.catalogue = catalogueService
         self.player = AudioClient(configuration: audioConfiguration)
     }
+  
+  public func setCurrentMood(_ mood: Float) async throws {
+    if (mood < 0){
+      throw NSError(domain: "Mood must be between 0 and 1", code: 1001)
+    } else if (mood > 1){
+      throw NSError(domain: "Mood must be between 0 and 1", code: 1001)
+    }
+    
+    // TODO: implement
+    return
+  }
+  
+  public func rateListeningSession(_ rating: Float) async throws {
+    if (rating < 0){
+      throw NSError(domain: "Rating must be between 0 and 1", code: 1001)
+    } else if (rating > 1){
+      throw NSError(domain: "Rating must be between 0 and 1", code: 1001)
+    }
+    
+    // TODO: implement
+    return
+  }
 }
