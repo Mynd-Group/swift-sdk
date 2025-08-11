@@ -18,15 +18,45 @@ struct EventTrackingClientInfraConfig {
 
 private let log = Logger(prefix: "EventTrackingClient.Infra")
 struct EventTrackingClientInfraService: EventTrackingClientProtocol {
+  private var sentProgressEvents: [String: Double] = [:]
+  private let threshholds: [String: Double] = [
+    "25": 0.25,
+    "50": 0.5,
+    "75": 0.75,
+  ]
   private let authedHttpClient: HttpClientProtocol
 
   init(config: EventTrackingClientInfraConfig) {
     self.authedHttpClient = config.authedHttpClient
   }
 
+  private func getNextProgressThreshold(for songId: String, sessionId: String) -> Double? {
+    let lastSentProgress = sentProgressEvents[songId + sessionId] ?? 0
+    let nextThreshold = threshholds.first { $0.value > lastSentProgress }
+    return nextThreshold?.value
+  }
+
+  private func getValidThreshold(for songId: String, sessionId: String, progress: Double)
+    -> Double?
+  {
+    let nextThreshold = getNextProgressThreshold(for: songId, sessionId: sessionId)
+    if nextThreshold == nil {
+      return nil
+    }
+
+    if progress < nextThreshold! {
+      return nil
+    }
+
+    return nextThreshold!
+  }
+
   public func trackEvent(_ event: EventTrackingEvent) async throws {
     do {
       let payload = buildPayload(from: event)
+      guard let payload = payload else {
+        return
+      }
       guard let url = URL(string: "\(Config.baseUrl)/integration/tracking/events") else {
         log.error("Failed to create events URL")
         throw URLError(.badURL)
@@ -40,7 +70,7 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
     }
   }
 
-  private func buildPayload(from event: EventTrackingEvent) -> Payload {
+  private func buildPayload(from event: EventTrackingEvent) -> Payload? {
     switch event {
     case .trackStarted(let song, let sessionId, let playlistSessionId):
       return Payload(
@@ -48,9 +78,13 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
         playlistSessionId: playlistSessionId)
 
     case .trackProgress(let song, let progress, let sessionId, let playlistSessionId):
+      let validThreshold = getValidThreshold(for: song.id, sessionId: sessionId, progress: progress)
+      if validThreshold == nil {
+        return nil
+      }
       return Payload(
         type: "TrackProgress", sessionId: sessionId, songId: song.id, playlistId: nil,
-        progress: progress, playlistSessionId: playlistSessionId)
+        progress: validThreshold, playlistSessionId: playlistSessionId)
 
     case .trackCompleted(let song, let sessionId, let playlistSessionId):
       return Payload(
