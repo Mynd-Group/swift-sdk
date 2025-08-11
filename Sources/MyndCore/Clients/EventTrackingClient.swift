@@ -30,16 +30,29 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
     self.authedHttpClient = config.authedHttpClient
   }
 
-  private func getNextProgressThreshold(for songId: String, sessionId: String) -> Double? {
-    let lastSentProgress = sentProgressEvents[songId + sessionId] ?? 0
+  func getProgressId(for songId: String, sessionId: String, playlistSessionId: String) -> String {
+    return "\(songId)-\(sessionId)-\(playlistSessionId)"
+  }
+
+  private func getNextProgressThreshold(
+    for songId: String, sessionId: String, playlistSessionId: String
+  )
+    -> Double?
+  {
+    let lastSentProgress =
+      sentProgressEvents[
+        getProgressId(for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)] ?? 0
     let nextThreshold = threshholds.first { $0.value > lastSentProgress }
     return nextThreshold?.value
   }
 
-  private func getValidThreshold(for songId: String, sessionId: String, progress: Double)
+  private func getValidThreshold(
+    for songId: String, sessionId: String, playlistSessionId: String, progress: Double
+  )
     -> Double?
   {
-    let nextThreshold = getNextProgressThreshold(for: songId, sessionId: sessionId)
+    let nextThreshold = getNextProgressThreshold(
+      for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)
     if nextThreshold == nil {
       return nil
     }
@@ -78,7 +91,9 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
         playlistSessionId: playlistSessionId)
 
     case .trackProgress(let song, let progress, let sessionId, let playlistSessionId):
-      let validThreshold = getValidThreshold(for: song.id, sessionId: sessionId, progress: progress)
+      let validThreshold = getValidThreshold(
+        for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId, progress: progress
+      )
       if validThreshold == nil {
         return nil
       }
