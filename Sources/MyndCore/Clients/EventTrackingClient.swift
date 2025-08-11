@@ -32,7 +32,7 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
         throw URLError(.badURL)
       }
       log.info("Sending event", dictionary: ["type": payload.type, "sessionId": payload.sessionId])
-      let _: EmptyResponse = try await authedHttpClient.post(url, body: payload, headers: nil)
+      //   let _: EmptyResponse = try await authedHttpClient.post(url, body: payload, headers: nil)
       log.info("Event sent successfully", dictionary: ["type": payload.type])
     } catch {
       log.error("Failed to send event: \(error)")
