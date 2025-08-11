@@ -120,6 +120,7 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
 }
 
 private struct Payload: Encodable {
+  let idempotencyKey: String = id()
   let type: String
   let sessionId: String
   let songId: String?
