@@ -80,15 +80,26 @@ public final class AudioClient: AudioClientProtocol {
 
   private var cancellables = Set<AnyCancellable>()
   private let cfg: Configuration
+  private let listeningSessionManager: ListeningSessionManager
+  private let eventTrackingClient: EventTrackingClientInfraService
+  private var playlistSessionId: String = id()
 
   // MARK: -- Init
-  public init(configuration: Configuration = .init()) {
+  init(
+    configuration: Configuration, listeningSessionManager: ListeningSessionManager,
+    eventTrackingClient: EventTrackingClientInfraService
+  ) {
     cfg = configuration
+    self.listeningSessionManager = listeningSessionManager
+    self.eventTrackingClient = eventTrackingClient
+
     setupAuxiliaryPipelines()
+    setupEventTracking()
   }
 
   // MARK: -- Public player controls ----------------------------------------------------------
   public func play(_ playlist: PlaylistWithSongs) async {
+    playlistSessionId = id()
     _ = try? activateSessionIfNeeded()
     await core.play(playlist)
     let imageUrl = playlist.playlist.image?.url
@@ -109,6 +120,87 @@ public final class AudioClient: AudioClientProtocol {
 
   public func setVolume(_ value: Float) {
     core.setVolume(value)
+  }
+
+  private func setupEventTracking() {
+    core.events
+      .sink { [weak self] event in
+        guard let self else { return }
+        switch event {
+        case .playlistQueued(let playlist):
+          self.playlistSessionId = id()
+          do {
+            Task {
+              try await eventTrackingClient.trackEvent(
+                .playlistStarted(
+                  playlist: playlist.playlist,
+                  sessionId: self.listeningSessionManager.getSessionId(),
+                  playlistSessionId: self.playlistSessionId))
+            }
+          } catch {
+            log.error("Failed to track event: \(error)")
+          }
+        case .playlistFinished(let playlist):
+          do {
+            Task {
+              try await eventTrackingClient.trackEvent(
+                .playlistCompleted(
+                  playlist: playlist.playlist,
+                  sessionId: self.listeningSessionManager.getSessionId(),
+                  playlistSessionId: self.playlistSessionId))
+            }
+          } catch {
+            log.error("Failed to track event: \(error)")
+          }
+        default:
+          break
+        }
+      }
+      .store(in: &cancellables)
+
+    core.royaltyEvents
+      .sink { [weak self] event in
+        guard let self else { return }
+        switch event {
+        case .trackStarted(let song):
+          do {
+            Task {
+              try await eventTrackingClient.trackEvent(
+                .trackStarted(
+                  song: song, sessionId: self.listeningSessionManager.getSessionId(),
+                  playlistSessionId: self.playlistSessionId))
+            }
+          } catch {
+            log.error("Failed to track event: \(error)")
+          }
+
+        case .trackProgress(let song, let progress):
+          do {
+            Task {
+              try await eventTrackingClient.trackEvent(
+                .trackProgress(
+                  song: song, progress: progress,
+                  sessionId: self.listeningSessionManager.getSessionId(),
+                  playlistSessionId: self.playlistSessionId))
+            }
+          } catch {
+            log.error("Failed to track event: \(error)")
+          }
+
+        case .trackFinished(let song):
+          do {
+            Task {
+              try await eventTrackingClient.trackEvent(
+                .trackCompleted(
+                  song: song, sessionId: self.listeningSessionManager.getSessionId(),
+                  playlistSessionId: self.playlistSessionId))
+            }
+          } catch {
+            log.error("Failed to track event: \(error)")
+          }
+        }
+      }
+      .store(in: &cancellables)
   }
 
   // MARK: -- Helpers -------------------------------------------------------------------------

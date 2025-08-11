@@ -3,8 +3,7 @@ import Combine
 import Observation
 
 func makeAssetsPlayable(_ assets: [AVURLAsset]) async -> [AVURLAsset] {
-  return await withTaskGroup(of: (Int, AVURLAsset).self, returning: [AVURLAsset].self)
-  { group in
+  return await withTaskGroup(of: (Int, AVURLAsset).self, returning: [AVURLAsset].self) { group in
     for (index, asset) in assets.enumerated() {
       group.addTask {
         await withCheckedContinuation { continuation in
@@ -22,7 +21,8 @@ func makeAssetsPlayable(_ assets: [AVURLAsset]) async -> [AVURLAsset] {
       indexedResults.append(result)
     }
 
-    return indexedResults
+    return
+      indexedResults
       .sorted { $0.0 < $1.0 }
       .map { $0.1 }
   }
@@ -167,7 +167,7 @@ public enum AudioPlayerEvent {
   case playlistQueued(PlaylistWithSongs)
   case stateChanged(PlaybackState)
   case progressUpdated(PlaybackProgress)
-  case playlistCompleted
+  case playlistFinished(PlaylistWithSongs)
   case songNetworkStalled
   case songNetworkFailure(Error)
   case errorOccurred(Error)
@@ -260,7 +260,9 @@ public final class CoreAudioPlayer {
   // MARK: - Public Thread-Safe API
   @MainActor
   public func play(_ playlistWithSongs: PlaylistWithSongs) async {
-    log.info("Starting play for playlist: \(playlistWithSongs.playlist.name) with \(playlistWithSongs.songs.count) songs")
+    log.info(
+      "Starting play for playlist: \(playlistWithSongs.playlist.name) with \(playlistWithSongs.songs.count) songs"
+    )
 
     guard !playlistWithSongs.songs.isEmpty else {
       state = .stopped
@@ -359,7 +361,6 @@ public final class CoreAudioPlayer {
     player.replaceCurrentItem(with: item)
     player.play()
 
-
     batchLoadingTask = Task {
       guard songs.count > initialSize else {
         return
@@ -368,8 +369,7 @@ public final class CoreAudioPlayer {
       let remainingSongs: [Song] = Array(songs[initialSize...])
       let batchSize = 30
 
-      for batchIndex in stride(from: 0, to: remainingSongs.count, by: batchSize)
-      {
+      for batchIndex in stride(from: 0, to: remainingSongs.count, by: batchSize) {
         guard !Task.isCancelled else {
           return
         }
@@ -522,13 +522,13 @@ public final class CoreAudioPlayer {
     switch repeatMode {
     case .none:
       if isLastSong {
-        eventSubject.send(.playlistCompleted)
+        eventSubject.send(.playlistFinished(playlist))
         stop()
       }
 
     case .all:
       if isLastSong {
-        eventSubject.send(.playlistCompleted)
+        eventSubject.send(.playlistFinished(playlist))
         Task {
           await replayAllSongs()
         }
@@ -624,12 +624,13 @@ public final class CoreAudioPlayer {
       playlistDuration: playlistDuration
     )
 
-        if newProgress != progress {
+    if newProgress != progress {
       progress = newProgress
       eventSubject.send(.progressUpdated(newProgress))
 
       if let song = currentSong {
-        let progressValue = trackDuration.seconds > 0 ? trackCurrentTime / trackDuration.seconds : 0.0
+        let progressValue =
+          trackDuration.seconds > 0 ? trackCurrentTime / trackDuration.seconds : 0.0
         royaltyEventSubject.send(.trackProgress(song, progress: progressValue))
       }
     }
