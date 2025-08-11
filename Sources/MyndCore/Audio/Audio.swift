@@ -167,7 +167,7 @@ public enum AudioPlayerEvent {
   case playlistQueued(PlaylistWithSongs)
   case stateChanged(PlaybackState)
   case progressUpdated(PlaybackProgress)
-  case playlistFinished(PlaylistWithSongs)
+  case playlistCompleted(PlaylistWithSongs)
   case songNetworkStalled
   case songNetworkFailure(Error)
   case errorOccurred(Error)
@@ -522,13 +522,13 @@ public final class CoreAudioPlayer {
     switch repeatMode {
     case .none:
       if isLastSong {
-        eventSubject.send(.playlistFinished(playlist))
+        eventSubject.send(.playlistCompleted(playlist))
         stop()
       }
 
     case .all:
       if isLastSong {
-        eventSubject.send(.playlistFinished(playlist))
+        eventSubject.send(.playlistCompleted(playlist))
         Task {
           await replayAllSongs()
         }

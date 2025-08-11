@@ -140,7 +140,7 @@ public final class AudioClient: AudioClientProtocol {
           } catch {
             log.error("Failed to track event: \(error)")
           }
-        case .playlistFinished(let playlist):
+        case .playlistCompleted(let playlist):
           do {
             Task {
               try await eventTrackingClient.trackEvent(
