@@ -9,12 +9,12 @@ struct AuthResponse: Codable {
 }
 
 public func authFn() async throws -> AuthPayloadProtocol {
-    guard let url = URL(string: "https://staging.app.myndstream.com/api/v1/integration-user/authenticate") else {
+    guard let url = URL(string: "http://localhost:4000/api/v1/integration-user/authenticate") else {
         print("Invalid URL")
         throw URLError(.badURL)
     }
 
-    let apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbkFwaUtleUlkIjoiZmIxZjM1ZTYtM2ZkNy00MWQ3LWIwZWUtNGYxYzY3ZjY2NjU2IiwiYWNjb3VudElkIjoiMTBlOTlmMzAtNDlkNy00ZDljLWFiMWEtMmU2MjYxMTk2YTRiIiwiaWF0IjoxNzU0OTE3NTU1fQ.u1wryXvdoWmvYFr33vD3kc-eyH2JhEMTpDTXhaVrqS0"
+    let apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbkFwaUtleUlkIjoiMzMyNzE5NzctOWRhYS00YjJhLWFkODQtYWNlZjU0MzQ3ZmQ3IiwiYWNjb3VudElkIjoiMTBlOTlmMzAtNDlkNy00ZDljLWFiMWEtMmU2MjYxMTk2YTRiIiwiaWF0IjoxNzU1MDA5ODI0fQ.H0eYYVzPJpSvs_ys6OgexgsOaaMVo3tQuEbP0DfSnbw"
 
     let requestBody = ["providerUserId": "some-random-id"]
 

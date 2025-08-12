@@ -17,13 +17,9 @@ struct EventTrackingClientInfraConfig {
 }
 
 private let log = Logger(prefix: "EventTrackingClient.Infra")
-struct EventTrackingClientInfraService: EventTrackingClientProtocol {
+actor EventTrackingClientInfraService: EventTrackingClientProtocol {
   private var sentProgressEvents: [String: Double] = [:]
-  private let threshholds: [String: Double] = [
-    "25": 0.25,
-    "50": 0.5,
-    "75": 0.75,
-  ]
+  private let thresholds: [Double] = [0.25, 0.5, 0.75]
   private let authedHttpClient: HttpClientProtocol
 
   init(config: EventTrackingClientInfraConfig) {
@@ -36,32 +32,28 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
 
   private func getNextProgressThreshold(
     for songId: String, sessionId: String, playlistSessionId: String
-  )
-    -> Double?
-  {
+  ) -> Double? {
     let lastSentProgress =
       sentProgressEvents[
         getProgressId(for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)] ?? 0
-    let nextThreshold = threshholds.first { $0.value > lastSentProgress }
-    return nextThreshold?.value
+    return thresholds.first(where: { $0 > lastSentProgress })
   }
 
   private func getValidThreshold(
     for songId: String, sessionId: String, playlistSessionId: String, progress: Double
-  )
-    -> Double?
-  {
-    let nextThreshold = getNextProgressThreshold(
-      for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)
-    if nextThreshold == nil {
+  ) -> Double? {
+    if progress.isNaN || progress < 0 || progress > 1 {
+      log.info("Skipping progress event: invalid progress", dictionary: ["progress": progress])
       return nil
     }
-
-    if progress < nextThreshold! {
+    guard
+      let nextThreshold = getNextProgressThreshold(
+        for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)
+    else {
       return nil
     }
-
-    return nextThreshold!
+    if progress < nextThreshold { return nil }
+    return nextThreshold
   }
 
   public func trackEvent(_ event: EventTrackingEvent) async throws {
@@ -70,12 +62,22 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
       guard let payload = payload else {
         return
       }
-      guard let url = URL(string: "\(Config.baseUrl)/integration/tracking/events") else {
+      guard let url = URL(string: "\(Config.baseUrl)/integration-events/") else {
         log.error("Failed to create events URL")
         throw URLError(.badURL)
       }
       log.info("Sending event", dictionary: ["type": payload.type, "sessionId": payload.sessionId])
-      //   let _: EmptyResponse = try await authedHttpClient.post(url, body: payload, headers: nil)
+      if case .trackProgress(let song, let progress, let sessionId, let playlistSessionId) = event {
+        if let threshold = getValidThreshold(
+          for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId,
+          progress: progress)
+        {
+          let key = getProgressId(
+            for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId)
+          sentProgressEvents[key] = threshold
+        }
+      }
+      let _: EmptyResponse = try await authedHttpClient.post(url, body: payload, headers: nil)
       log.info("Event sent successfully", dictionary: ["type": payload.type])
     } catch {
       log.error("Failed to send event: \(error)")
@@ -87,33 +89,36 @@ struct EventTrackingClientInfraService: EventTrackingClientProtocol {
     switch event {
     case .trackStarted(let song, let sessionId, let playlistSessionId):
       return Payload(
-        type: "TrackStarted", sessionId: sessionId, songId: song.id, playlistId: nil, progress: nil,
+        type: "track:started", sessionId: sessionId, songId: song.id, playlistId: nil,
+        progress: nil,
         playlistSessionId: playlistSessionId)
 
     case .trackProgress(let song, let progress, let sessionId, let playlistSessionId):
-      let validThreshold = getValidThreshold(
-        for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId, progress: progress
-      )
-      if validThreshold == nil {
+      guard
+        let validThreshold = getValidThreshold(
+          for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId,
+          progress: progress
+        )
+      else {
         return nil
       }
       return Payload(
-        type: "TrackProgress", sessionId: sessionId, songId: song.id, playlistId: nil,
+        type: "track:progress", sessionId: sessionId, songId: song.id, playlistId: nil,
         progress: validThreshold, playlistSessionId: playlistSessionId)
 
     case .trackCompleted(let song, let sessionId, let playlistSessionId):
       return Payload(
-        type: "TrackCompleted", sessionId: sessionId, songId: song.id, playlistId: nil,
+        type: "track:completed", sessionId: sessionId, songId: song.id, playlistId: nil,
         progress: nil, playlistSessionId: playlistSessionId)
 
     case .playlistStarted(let playlist, let sessionId, let playlistSessionId):
       return Payload(
-        type: "PlaylistStarted", sessionId: sessionId, songId: nil, playlistId: playlist.id,
+        type: "playlist:started", sessionId: sessionId, songId: nil, playlistId: playlist.id,
         progress: nil, playlistSessionId: playlistSessionId)
 
     case .playlistCompleted(let playlist, let sessionId, let playlistSessionId):
       return Payload(
-        type: "PlaylistCompleted", sessionId: sessionId, songId: nil, playlistId: playlist.id,
+        type: "playlist:completed", sessionId: sessionId, songId: nil, playlistId: playlist.id,
         progress: nil, playlistSessionId: playlistSessionId)
     }
   }
@@ -126,7 +131,7 @@ private struct Payload: Encodable {
   let songId: String?
   let playlistId: String?
   let progress: Double?
-  let playlistSessionId: String?
+  let playlistSessionId: String
 }
 
 private struct EmptyResponse: Decodable {}
