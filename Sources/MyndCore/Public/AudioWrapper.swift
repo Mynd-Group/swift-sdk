@@ -83,6 +83,7 @@ public final class AudioClient: AudioClientProtocol {
   private let listeningSessionManager: ListeningSessionManager
   private let eventTrackingClient: EventTrackingClientInfraService
   private var playlistSessionId: String = id()
+  private var currentSongSessionId: String = id()
 
   // MARK: -- Init
   init(
@@ -129,28 +130,28 @@ public final class AudioClient: AudioClientProtocol {
         switch event {
         case .playlistQueued(let playlist):
           self.playlistSessionId = id()
-          do {
-            Task {
+          Task {
+            do {
               try await eventTrackingClient.trackEvent(
                 .playlistStarted(
-                  playlist: playlist.playlist,
+                  playlist: playlist,
                   sessionId: self.listeningSessionManager.getSessionId(),
                   playlistSessionId: self.playlistSessionId))
+            } catch {
+              log.error("Failed to track event: \(error)")
             }
-          } catch {
-            log.error("Failed to track event: \(error)")
           }
         case .playlistCompleted(let playlist):
-          do {
-            Task {
+          Task {
+            do {
               try await eventTrackingClient.trackEvent(
                 .playlistCompleted(
-                  playlist: playlist.playlist,
+                  playlist: playlist,
                   sessionId: self.listeningSessionManager.getSessionId(),
                   playlistSessionId: self.playlistSessionId))
+            } catch {
+              log.error("Failed to track event: \(error)")
             }
-          } catch {
-            log.error("Failed to track event: \(error)")
           }
         default:
           break
@@ -163,40 +164,62 @@ public final class AudioClient: AudioClientProtocol {
         guard let self else { return }
         switch event {
         case .trackStarted(let song):
-          do {
-            Task {
+          self.currentSongSessionId = id()
+          guard let currentPlaylist = self.core.currentPlaylist else {
+            log.error("No current playlist available for track started event")
+            return
+          }
+          Task {
+            do {
               try await eventTrackingClient.trackEvent(
                 .trackStarted(
-                  song: song, sessionId: self.listeningSessionManager.getSessionId(),
+                  song: song,
+                  playlist: currentPlaylist.playlist,
+                  songSessionId: self.currentSongSessionId,
+                  sessionId: self.listeningSessionManager.getSessionId(),
                   playlistSessionId: self.playlistSessionId))
+            } catch {
+              log.error("Failed to track event: \(error)")
             }
-          } catch {
-            log.error("Failed to track event: \(error)")
           }
 
         case .trackProgress(let song, let progress):
-          do {
-            Task {
+          guard let currentPlaylist = self.core.currentPlaylist else {
+            log.error("No current playlist available for track progress event")
+            return
+          }
+          Task {
+            do {
               try await eventTrackingClient.trackEvent(
                 .trackProgress(
-                  song: song, progress: progress,
+                  song: song,
+                  playlist: currentPlaylist.playlist,
+                  progress: progress,
+                  songSessionId: self.currentSongSessionId,
                   sessionId: self.listeningSessionManager.getSessionId(),
                   playlistSessionId: self.playlistSessionId))
+            } catch {
+              log.error("Failed to track event: \(error)")
             }
-          } catch {
-            log.error("Failed to track event: \(error)")
           }
 
         case .trackFinished(let song):
-          do {
-            Task {
+          guard let currentPlaylist = self.core.currentPlaylist else {
+            log.error("No current playlist available for track completed event")
+            return
+          }
+          Task {
+            do {
               try await eventTrackingClient.trackEvent(
                 .trackCompleted(
-                  song: song, sessionId: self.listeningSessionManager.getSessionId(),
+                  song: song,
+                  playlist: currentPlaylist.playlist,
+                  songSessionId: self.currentSongSessionId,
+                  sessionId: self.listeningSessionManager.getSessionId(),
                   playlistSessionId: self.playlistSessionId))
+            } catch {
+              log.error("Failed to track event: \(error)")
             }
-          } catch {
-            log.error("Failed to track event: \(error)")
           }
         }
       }
