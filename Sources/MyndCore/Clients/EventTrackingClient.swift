@@ -32,21 +32,24 @@ actor EventTrackingClientInfraService: EventTrackingClientProtocol {
     self.authedHttpClient = config.authedHttpClient
   }
 
-  func getProgressId(for songId: String, sessionId: String, playlistSessionId: String) -> String {
-    return "\(songId)-\(sessionId)-\(playlistSessionId)"
+  func getProgressId(for songSessionId: String, sessionId: String, playlistSessionId: String)
+    -> String
+  {
+    return "\(songSessionId)-\(sessionId)-\(playlistSessionId)"
   }
 
   private func getNextProgressThreshold(
-    for songId: String, sessionId: String, playlistSessionId: String
+    for songSessionId: String, sessionId: String, playlistSessionId: String
   ) -> Double? {
     let lastSentProgress =
       sentProgressEvents[
-        getProgressId(for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)] ?? 0
+        getProgressId(
+          for: songSessionId, sessionId: sessionId, playlistSessionId: playlistSessionId)] ?? 0
     return thresholds.first(where: { $0 > lastSentProgress })
   }
 
   private func getValidThreshold(
-    for songId: String, sessionId: String, playlistSessionId: String, progress: Double
+    for songSessionId: String, sessionId: String, playlistSessionId: String, progress: Double
   ) -> Double? {
     if progress.isNaN || progress < 0 || progress > 1 {
       log.info("Skipping progress event: invalid progress", dictionary: ["progress": progress])
@@ -54,7 +57,7 @@ actor EventTrackingClientInfraService: EventTrackingClientProtocol {
     }
     guard
       let nextThreshold = getNextProgressThreshold(
-        for: songId, sessionId: sessionId, playlistSessionId: playlistSessionId)
+        for: songSessionId, sessionId: sessionId, playlistSessionId: playlistSessionId)
     else {
       return nil
     }
@@ -76,22 +79,8 @@ actor EventTrackingClientInfraService: EventTrackingClientProtocol {
         log.error("Failed to create events URL")
         throw URLError(.badURL)
       }
-      log.info("Sending event", dictionary: ["sessionId": payload.sessionId])
-      if case .trackProgress(let song, _, let progress, _, let sessionId, let playlistSessionId) =
-        event
-      {
-        progressLock.withLock {
-          if let threshold = getValidThreshold(
-            for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId,
-            progress: progress)
-          {
-            let key = getProgressId(
-              for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId)
-            sentProgressEvents[key] = threshold
-          }
 
-        }
-      }
+      log.info("Sending event", dictionary: ["sessionId": payload.sessionId])
       let _: EmptyResponse = try await authedHttpClient.post(url, body: payload, headers: nil)
       log.info("Event sent successfully", dictionary: ["sessionId": payload.sessionId])
     } catch {
@@ -117,14 +106,20 @@ actor EventTrackingClientInfraService: EventTrackingClientProtocol {
 
     case .trackProgress(
       let song, let playlist, let progress, let songSessionId, let sessionId, let playlistSessionId):
+      // stops us from sending duplicate events
       guard
         let validThreshold = getValidThreshold(
-          for: song.id, sessionId: sessionId, playlistSessionId: playlistSessionId,
+          for: songSessionId, sessionId: sessionId, playlistSessionId: playlistSessionId,
           progress: progress
         )
       else {
         return nil
       }
+      let key = getProgressId(
+        for: songSessionId, sessionId: sessionId, playlistSessionId: playlistSessionId)
+
+      sentProgressEvents[key] = validThreshold
+
       return TrackProgressPayload(
         songId: song.id,
         songName: song.name,
