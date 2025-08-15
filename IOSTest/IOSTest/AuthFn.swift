@@ -9,12 +9,12 @@ struct AuthResponse: Codable {
 }
 
 public func authFn() async throws -> AuthPayloadProtocol {
-    guard let url = URL(string: "https://noted-fluent-termite.ngrok-free.app/api/v1/integration-user/authenticate") else {
+    guard let url = URL(string: "http://localhost:4000/api/v1/integration-user/authenticate") else {
         print("Invalid URL")
         throw URLError(.badURL)
     }
 
-    let apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbkFwaUtleUlkIjoiZTBmMzQ1YmEtYWRiYi00OWU4LWE2NjMtZjkxNzIzYTc0OGQxIiwiYWNjb3VudElkIjoiMTBlOTlmMzAtNDlkNy00ZDljLWFiMWEtMmU2MjYxMTk2YTRiIiwiaWF0IjoxNzUyNTk1NDM4fQ.t--RVG-3F3fhXgKHyrZRAKlpmUvM-Lwu_svcSCN9pHU"
+    let apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbnRlZ3JhdGlvbkFwaUtleUlkIjoiMzMyNzE5NzctOWRhYS00YjJhLWFkODQtYWNlZjU0MzQ3ZmQ3IiwiYWNjb3VudElkIjoiMTBlOTlmMzAtNDlkNy00ZDljLWFiMWEtMmU2MjYxMTk2YTRiIiwiaWF0IjoxNzU1MDA5ODI0fQ.H0eYYVzPJpSvs_ys6OgexgsOaaMVo3tQuEbP0DfSnbw"
 
     let requestBody = ["providerUserId": "some-random-id"]
 
